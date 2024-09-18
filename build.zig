@@ -18,6 +18,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    lib.linkLibC();
+    exe.linkLibrary(lib);
+
     b.installArtifact(lib);
     b.installArtifact(exe);
 

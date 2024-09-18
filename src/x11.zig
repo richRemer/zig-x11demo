@@ -1,13 +1,15 @@
 const std = @import("std");
-const testing = std.testing;
 const c = @cImport({
-  @cInclude("X.h");
+  @cInclude("X11/X.h");
 });
 
-export fn add(a: i32, b: i32) i32 {
-    return a + b;
+pub export fn protocolVersion() u8 {
+  return c.X_PROTOCOL;
 }
 
-test "basic add functionality" {
-    try testing.expect(add(3, 7) == 10);
+pub export fn openDisplay() u8 {
+  log.debug("opening X11 display", .{});
+  return c.X_PROTOCOL;
 }
+
+pub const log = std.log.scoped(.x11);
