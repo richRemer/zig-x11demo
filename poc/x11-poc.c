@@ -1,3 +1,5 @@
+// https://hereket.com/posts/from-scratch-x11-windowing/
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdio.h>
