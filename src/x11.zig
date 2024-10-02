@@ -12,28 +12,62 @@ const Connection = struct {
 pub const Server = struct {
     allocator: std.mem.Allocator,
     connection: Connection,
-    success: XSetupSuccess,
-    buffer: []u8,
     global_id: u32 = 0,
+    root_window_id: u32,
+    root_visual_id: u32,
+    vendor: []u8,
+    formats: []XPixelFormat,
+    success_data: []u8,
+    success: *XSetupSuccess,
 
     pub fn init(
         allocator: std.mem.Allocator,
         connection: Connection,
-        success: XSetupSuccess,
         data: []u8,
     ) !Server {
-        const buffer = try allocator.dupe(u8, data);
+        const success_data = try allocator.dupe(u8, data);
+        errdefer allocator.free(success_data);
+
+        const success_address = @intFromPtr(success_data.ptr);
+        const success = @as(*XSetupSuccess, @ptrFromInt(success_address));
+        const vendor_data = success_data[@sizeOf(XSetupSuccess)..];
+        const vendor = vendor_data[0..success.vendor_len];
+        const formats_data = vendor_data[x_pad(u16, success.vendor_len)..];
+        const formats_address = @intFromPtr(formats_data.ptr);
+        const formats_ptr: [*]XPixelFormat = @ptrFromInt(formats_address);
+        const formats = formats_ptr[0..success.num_formats];
+
+        const screen = first_success_screen(success) orelse {
+            log.err("success has no screens", .{});
+            return error.X11ProtocolError;
+        };
+
+        const depth = first_screen_depth(screen) orelse {
+            log.err("screen has no depths", .{});
+            return error.X11ProtocolError;
+        };
+
+        const visual = first_depth_visual(depth) orelse {
+            log.err("depth has no visuals", .{});
+            return error.X11ProtocolError;
+        };
+
+        log.debug("{s} [vendor]", .{vendor});
 
         return .{
             .allocator = allocator,
             .connection = connection,
+            .root_window_id = screen.root,
+            .root_visual_id = visual.visual_id,
+            .vendor = vendor,
+            .formats = formats,
+            .success_data = success_data,
             .success = success,
-            .buffer = buffer,
         };
     }
 
     pub fn deinit(this: Server) void {
-        this.allocator.free(this.buffer);
+        this.allocator.free(this.success_data);
     }
 
     pub fn createWindow(
@@ -50,14 +84,15 @@ pub const Server = struct {
 
         // basic request info
         try writer.writeStruct(XCreateWindow{
-            .depth = 32, // TODO: default to root window depth
+            .depth = 0, // TODO: figure out root window depth
             .request_len = request_len,
             .window_id = window_id,
-            .parent_id = 0, // TODO: use actual root window ID
+            .parent_id = this.root_window_id,
             .x = x,
             .y = y,
             .width = width,
             .height = height,
+            .class = WindowClass.input_output,
             .value_mask = .{
                 .background_pixel = true,
                 .event_mask = true,
@@ -71,6 +106,37 @@ pub const Server = struct {
         try writer.writeStruct(Events{ .exposure = true, .key_press = true });
 
         return window_id;
+    }
+
+    pub fn mapWindow(this: Server, window_id: u32) !void {
+        const writer = this.connection.stream.writer();
+
+        try writer.writeStruct(XMapWindow{
+            .window_id = window_id,
+        });
+    }
+
+    pub fn readMessage(this: Server) !void {
+        var buffer: [32]u8 = undefined;
+        const reader = this.connection.stream.reader();
+
+        _ = try reader.readAll(buffer[0..]);
+
+        switch (buffer[0]) {
+            0 => {
+                const address = @intFromPtr(&buffer);
+                const err = @as(*XMessageError, @ptrFromInt(address)).*;
+                const code = @tagName(err.code);
+                const major = err.major_opcode;
+                const minor = err.minor_opcode;
+                const seq = err.sequence_number;
+                const op = @tagName(@as(RequestOpcode, @enumFromInt(major)));
+
+                log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
+                return error.X11ErrorMessage;
+            },
+            else => {},
+        }
     }
 
     pub fn getNextId(this: *Server) u32 {
@@ -122,22 +188,34 @@ pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
 
     try writer.writeStruct(XSetupRequest{});
 
-    const header = try reader.readStruct(XSetupHeader);
-    const data = try allocator.alloc(u8, header.data_len * 4);
-    defer allocator.free(data);
+    // first couple bytes of response have status and length of data
+    const header_len = @sizeOf(XSetupHeader);
+    const header_data = try allocator.alloc(u8, header_len);
+    defer allocator.free(header_data);
 
-    _ = try reader.readAll(data);
+    _ = try reader.readAll(header_data);
+
+    const header_address = @intFromPtr(header_data.ptr);
+    const header = @as(*XSetupHeader, @ptrFromInt(header_address)).*;
+    const success_len = header_len + header.data_len * 4;
+    const success_data = try allocator.alloc(u8, success_len);
+    defer allocator.free(success_data);
+
+    // write header to data and copy remaining bytes from socket
+    @memcpy(success_data[0..header_len], header_data);
+    _ = try reader.readAll(success_data[header_len..]);
+    // data now contains full setup success with all related data
 
     switch (header.state) {
         .authenticate => {
             // TODO: figure out length of reason
-            log.err("X11 access denied: {s}", .{data[0..]});
+            log.err("X11 access denied: {s}", .{success_data[header_len..]});
             return error.X11AccessDenied;
         },
         .failure => {
-            const address = @intFromPtr(&header);
-            const failure = @as(*XSetupFailure, @ptrFromInt(address)).*;
-            const reason = data[0..failure.reason_len];
+            const failure = @as(*XSetupFailure, @ptrFromInt(header_address));
+            const reason_data = success_data[header_len..];
+            const reason = reason_data[0..failure.reason_len];
 
             log.err("X{d} (rev. {d}) connection setup failed: {s}", .{
                 failure.protocol_major_version,
@@ -148,32 +226,15 @@ pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
             return error.X11ProtocolError;
         },
         .success => {
-            const header_len = @sizeOf(XSetupHeader);
-            const success_len = @sizeOf(XSetupSuccess);
-            const body_len = success_len - header_len;
-            const header_address = @intFromPtr(&header);
-            const header_ptr = @as([*]u8, @ptrFromInt(header_address));
-            const success_buffer = try allocator.alloc(u8, success_len);
-            defer allocator.free(success_buffer);
-
-            assert(header_len == 8);
-            assert(body_len == 32);
-            assert(success_len == 40);
-
-            // copy header bytes to success struct
-            @memcpy(success_buffer[0..header_len], header_ptr);
-            // copy data bytes to success struct
-            @memcpy(success_buffer[header_len..success_len], data[0..body_len]);
-
-            const success = copyStruct(XSetupSuccess, success_buffer);
-            const server_data = data[body_len..];
+            const success_address = @intFromPtr(success_data.ptr);
+            const success = @as(*XSetupSuccess, @ptrFromInt(success_address));
 
             log.debug("connected to X{d} (rev. {d})", .{
                 success.protocol_major_version,
                 success.protocol_minor_version,
             });
 
-            return Server.init(allocator, connection, success, server_data);
+            return Server.init(allocator, connection, success_data);
         },
     }
 }
@@ -235,6 +296,64 @@ const XSetupSuccess = extern struct {
     pad1: u32 = 0,
 };
 
+const XMessageError = extern struct {
+    message_code: MessageCode = .@"error",
+    code: ErrorCode,
+    sequence_number: u16,
+    data: u32,
+    minor_opcode: u16,
+    major_opcode: u8,
+    unused: [21]u8 = [1]u8{0} ** 21,
+};
+
+const XMessageEvent = extern struct {
+    code: MessageCode,
+};
+
+const XPixelFormat = extern struct {
+    depth: u8,
+    bits_per_pixel: u8,
+    scanline_pad: u8,
+    unused: [5]u8 = [1]u8{0} ** 5,
+};
+
+const XScreen = extern struct {
+    root: u32,
+    default_colormap: u32,
+    white_pixel: u32,
+    black_pixel: u32,
+    current_input_masks: Events,
+    width_in_pixels: u16,
+    height_in_pixels: u16,
+    width_in_millimeters: u16,
+    height_in_millimeters: u16,
+    min_installed_maps: u16,
+    max_installed_maps: u16,
+    root_visual: u32,
+    backing_stores: BackingStores,
+    save_unders: SaveUnders,
+    root_depth: u8,
+    num_depths: u8,
+};
+
+const XDepth = extern struct {
+    depth: u8,
+    unused_1: u8,
+    num_visuals: u16,
+    unused_2: u32,
+};
+
+const XVisual = extern struct {
+    visual_id: u32,
+    class: VisualClass,
+    bits_per_rgb_value: u8,
+    colormap_entries: u16,
+    red_mask: u32,
+    green_mask: u32,
+    blue_mask: u32,
+    unused: u32,
+};
+
 const XCreateWindow = extern struct {
     opcode: RequestOpcode = .create_window,
     depth: u8,
@@ -251,7 +370,20 @@ const XCreateWindow = extern struct {
     value_mask: WindowAttributes,
 };
 
+const XMapWindow = extern struct {
+    opcode: RequestOpcode = .map_window,
+    unused: u8 = 0,
+    request_len: u16 = 2,
+    window_id: u32,
+};
+
 // enums
+
+pub const BackingStores = enum(u8) {
+    never,
+    when_mapped,
+    always,
+};
 
 pub const ErrorCode = enum(u8) {
     request = 1,
@@ -271,6 +403,44 @@ pub const ErrorCode = enum(u8) {
     name,
     length,
     implementation,
+};
+
+pub const MessageCode = enum(u8) {
+    @"error" = 0,
+    reply = 1,
+    event_key_press = 2,
+    event_key_release,
+    event_button_press,
+    event_button_release,
+    event_motion_notify,
+    event_enter_notify,
+    event_leave_notify,
+    event_focus_in,
+    event_focus_out,
+    event_keymap_notify,
+    event_expose,
+    event_graphics_exposure,
+    event_no_exposure,
+    event_visbility_notify,
+    event_create_notify,
+    event_destroy_notify,
+    event_unmap_notify,
+    event_map_notify,
+    event_map_request,
+    event_reparent_notify,
+    event_configure_notify,
+    event_configure_request,
+    event_gravity_notify,
+    event_resize_request,
+    event_circulate_notify,
+    event_circulate_request,
+    event_property_notify,
+    event_selection_clear,
+    event_selection_request,
+    event_selection_notify,
+    event_colormap_notify,
+    event_client_message,
+    event_mapping_notify,
 };
 
 pub const Protocol = enum(u8) {
@@ -415,10 +585,24 @@ pub const RequestOpcode = enum(u8) {
     no_operation = 127,
 };
 
+pub const SaveUnders = enum(u8) {
+    no,
+    yes,
+};
+
 pub const SetupState = enum(u8) {
     failure,
     success,
     authenticate,
+};
+
+pub const VisualClass = enum(u8) {
+    static_gray,
+    gray_scale,
+    static_color,
+    pseudo_color,
+    true_color,
+    direct_color,
 };
 
 pub const WindowClass = enum(u16) {
@@ -485,6 +669,36 @@ pub const WindowAttributes = packed struct(u32) {
 
 // buffer reading helpers
 
+inline fn first_success_screen(success: *XSetupSuccess) ?*XScreen {
+    if (success.num_screens > 0) {
+        var address = @intFromPtr(success);
+
+        address += @sizeOf(XSetupSuccess);
+        address += x_pad(u16, success.vendor_len);
+        address += success.num_formats * @sizeOf(XPixelFormat);
+
+        return @ptrFromInt(address);
+    } else {
+        return null;
+    }
+}
+
+inline fn first_screen_depth(screen: *XScreen) ?*XDepth {
+    if (screen.num_depths > 0) {
+        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(XScreen));
+    } else {
+        return null;
+    }
+}
+
+inline fn first_depth_visual(depth: *XDepth) ?*XVisual {
+    if (depth.num_visuals > 0) {
+        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(XDepth));
+    } else {
+        return null;
+    }
+}
+
 inline fn read16(buffer: *const [@divExact(@typeInfo(u16).int.bits, 8)]u8) u16 {
     return std.mem.readInt(u16, buffer, endian);
 }
@@ -499,6 +713,10 @@ fn copyStruct(comptime T: type, buffer: []const u8) T {
     } else {
         @panic("buffer not large enough for type");
     }
+}
+
+inline fn x_pad(comptime T: type, len: T) T {
+    return len + ((4 - (len % 4)) % 4);
 }
 
 // X11 logger

@@ -11,8 +11,13 @@ pub fn main() !void {
     var server = try x11.setup(allocator, connection);
     defer server.deinit();
 
-    const wid = try server.createWindow(0, 0, 100, 100);
-    std.debug.print("wid: {d}\n", .{wid});
+    for (server.formats) |format| {
+        std.debug.print("{any}\n", .{format});
+    }
+
+    const window_id = try server.createWindow(0, 0, 100, 100);
+    std.debug.print("window_id: {d}\n", .{window_id});
+    _ = try server.mapWindow(window_id);
 
     const status = eventLoop(server);
     std.process.exit(status);
@@ -43,7 +48,9 @@ fn eventLoop(server: x11.Server) u8 {
             running = false;
         }
 
-        // get reply messages
+        server.readMessage() catch {
+            x11.log.err("could not read message from X11 server", .{});
+        };
     }
 
     return 0;
