@@ -121,15 +121,21 @@ pub const Server = struct {
 
     pub fn readMessage(this: *Server) !void {
         var buffer: [32]u8 = undefined;
+        var name: [:0]const u8 = "";
+
         const address = @intFromPtr(&buffer);
         const reader = this.connection.stream.reader();
 
         _ = try reader.readAll(buffer[0..]);
 
+        if (buffer[0] > 1 and buffer[0] <= 35) {
+            name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+        }
+
         switch (buffer[0]) {
             @intFromEnum(MessageCode.@"error") => {
                 const err = @as(*XMessageError, @ptrFromInt(address)).*;
-                const code = @tagName(err.code);
+                const code = @tagName(err.error_code);
                 const major = err.major_opcode;
                 const minor = err.minor_opcode;
                 const seq = err.sequence_number;
@@ -138,30 +144,26 @@ pub const Server = struct {
                 log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
                 return error.X11ErrorMessage;
             },
-            @intFromEnum(MessageCode.event_focus_in) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.focus_in) => {
                 const event = @as(*XFocusIn, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const wid = event.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.event_focus_out) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.focus_out) => {
                 const event = @as(*XFocusOut, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const wid = event.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.event_keymap_notify) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.keymap_notify) => {
                 const event = @as(*XKeymapNotify, @ptrFromInt(address)).*;
 
                 log.debug("[x] {s}: {any}", .{ name, event.keys });
             },
-            @intFromEnum(MessageCode.event_expose) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.expose) => {
                 const event = @as(*XExpose, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const wid = event.window_id;
@@ -172,16 +174,14 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d}) {d},{d};{d}x{d}", .{ seq, name, wid, x, y, w, h });
             },
-            @intFromEnum(MessageCode.event_visbility_notify) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.visbility_notify) => {
                 const event = @as(*XVisibilityNotify, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const wid = event.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.event_map_notify) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.map_notify) => {
                 const event = @as(*XMapNotify, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const eid = event.event_window_id;
@@ -189,8 +189,7 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d})", .{ seq, name, wid, eid });
             },
-            @intFromEnum(MessageCode.event_reparent_notify) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.reparent_notify) => {
                 const event = @as(*XReparentNotify, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const eid = event.event_window_id;
@@ -199,8 +198,7 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d} pid: {d})", .{ seq, name, wid, eid, pid });
             },
-            @intFromEnum(MessageCode.event_property_notify) => {
-                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            @intFromEnum(MessageCode.property_notify) => {
                 const event = @as(*XPropertyNotify, @ptrFromInt(address)).*;
                 const seq = event.sequence_number;
                 const state = @tagName(event.state);
@@ -214,7 +212,7 @@ pub const Server = struct {
 
                 if (0 == (this.warned >> buffer[0]) & bit) {
                     this.warned = this.warned | (bit << buffer[0]);
-                    log.warn("ignoring unsupporeted event {d}: {any}", .{ buffer[0], buffer });
+                    log.warn("ignoring unsupported event {d}: {any}", .{ buffer[0], buffer });
                 }
             },
         }
@@ -378,8 +376,8 @@ const XSetupSuccess = extern struct {
 };
 
 const XMessageError = extern struct {
-    message_code: MessageCode = .@"error",
-    code: ErrorCode,
+    code: MessageCode = .@"error",
+    error_code: ErrorCode,
     sequence_number: u16,
     data: u32,
     minor_opcode: u16,
@@ -388,7 +386,7 @@ const XMessageError = extern struct {
 };
 
 const XFocusIn = extern struct {
-    message_code: MessageCode = .event_focus_in,
+    code: MessageCode = .focus_in,
     detail: FocusDetail,
     sequence_number: u16,
     window_id: u32,
@@ -397,7 +395,7 @@ const XFocusIn = extern struct {
 };
 
 const XFocusOut = extern struct {
-    message_code: MessageCode = .event_focus_out,
+    code: MessageCode = .focus_out,
     detail: FocusDetail,
     sequence_number: u16,
     window_id: u32,
@@ -406,12 +404,12 @@ const XFocusOut = extern struct {
 };
 
 const XKeymapNotify = extern struct {
-    message_code: MessageCode = .event_keymap_notify,
+    code: MessageCode = .keymap_notify,
     keys: [31]u8 = [1]u8{0} ** 31,
 };
 
 const XExpose = extern struct {
-    message_code: MessageCode = .event_expose,
+    code: MessageCode = .expose,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
@@ -424,7 +422,7 @@ const XExpose = extern struct {
 };
 
 const XVisibilityNotify = extern struct {
-    message_code: MessageCode = .event_visbility_notify,
+    code: MessageCode = .visbility_notify,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
@@ -433,7 +431,7 @@ const XVisibilityNotify = extern struct {
 };
 
 const XMapNotify = extern struct {
-    message_code: MessageCode = .event_map_notify,
+    code: MessageCode = .map_notify,
     unused_1: u8,
     sequence_number: u16,
     event_window_id: u32,
@@ -443,7 +441,7 @@ const XMapNotify = extern struct {
 };
 
 const XReparentNotify = extern struct {
-    message_code: MessageCode = .event_reparent_notify,
+    code: MessageCode = .reparent_notify,
     unused_1: u8,
     sequence_number: u16,
     event_window_id: u32,
@@ -456,7 +454,7 @@ const XReparentNotify = extern struct {
 };
 
 const XPropertyNotify = extern struct {
-    message_code: MessageCode = .event_property_notify,
+    code: MessageCode = .property_notify,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
@@ -585,41 +583,44 @@ pub const FocusMode = enum(u8) {
 };
 
 pub const MessageCode = enum(u8) {
+    // XMessageError, 32 bytes
     @"error" = 0,
+    // generic reply, 32 bytes + additional data
     reply = 1,
-    event_key_press = 2,
-    event_key_release,
-    event_button_press,
-    event_button_release,
-    event_motion_notify,
-    event_enter_notify,
-    event_leave_notify,
-    event_focus_in,
-    event_focus_out,
-    event_keymap_notify,
-    event_expose,
-    event_graphics_exposure,
-    event_no_exposure,
-    event_visbility_notify,
-    event_create_notify,
-    event_destroy_notify,
-    event_unmap_notify,
-    event_map_notify,
-    event_map_request,
-    event_reparent_notify,
-    event_configure_notify,
-    event_configure_request,
-    event_gravity_notify,
-    event_resize_request,
-    event_circulate_notify,
-    event_circulate_request,
-    event_property_notify,
-    event_selection_clear,
-    event_selection_request,
-    event_selection_notify,
-    event_colormap_notify,
-    event_client_message,
-    event_mapping_notify,
+    // events, 32 bytes each
+    key_press = 2,
+    key_release,
+    button_press,
+    button_release,
+    motion_notify,
+    enter_notify,
+    leave_notify,
+    focus_in,
+    focus_out,
+    keymap_notify,
+    expose,
+    graphics_exposure,
+    no_exposure,
+    visbility_notify,
+    create_notify,
+    destroy_notify,
+    unmap_notify,
+    map_notify,
+    map_request,
+    reparent_notify,
+    configure_notify,
+    configure_request,
+    gravity_notify,
+    resize_request,
+    circulate_notify,
+    circulate_request,
+    property_notify,
+    selection_clear,
+    selection_request,
+    selection_notify,
+    colormap_notify,
+    client_message,
+    mapping_notify,
 };
 
 pub const PropertyChangeState = enum(u8) {
