@@ -11,19 +11,14 @@ pub fn main() !void {
     var server = try x11.setup(allocator, connection);
     defer server.deinit();
 
-    for (server.formats) |format| {
-        std.debug.print("{any}\n", .{format});
-    }
-
     const window_id = try server.createWindow(0, 0, 100, 100);
-    std.debug.print("window_id: {d}\n", .{window_id});
     _ = try server.mapWindow(window_id);
 
-    const status = eventLoop(server);
+    const status = eventLoop(&server);
     std.process.exit(status);
 }
 
-fn eventLoop(server: x11.Server) u8 {
+fn eventLoop(server: *x11.Server) u8 {
     const fd_count = 1;
     const unlimited_timeout: i32 = -1;
 

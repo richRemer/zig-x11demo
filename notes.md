@@ -5,6 +5,7 @@
  * [XCB implementation - Apple][1]
  * [XCB implementation - XOrg][2]
  * [X11 Protocol][5]
+ * [X.org Reply][6]
 
 # Access Control
 Experiments suggest running the following before any connection attempts:
@@ -72,3 +73,5 @@ Further info: [No protocol specified][4]
 [4]: <https://unix.stackexchange.com/questions/209746/how-to-resolve-no-protocol-specified-for-su-user> "Stack Exchange - How to resolve ..."
 
 [5]: <https://stackoverflow.com/questions/9644251/how-do-unix-domain-sockets-differentiate-between-multiple-clients> "UNIX sockets with multiple clients"
+
+[6]: <https://cgit.freedesktop.org/xorg/proto/xproto/tree/Xproto.h> "Xproto.h"

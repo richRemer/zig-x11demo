@@ -19,6 +19,7 @@ pub const Server = struct {
     formats: []XPixelFormat,
     success_data: []u8,
     success: *XSetupSuccess,
+    warned: u256 = 0,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -27,6 +28,8 @@ pub const Server = struct {
     ) !Server {
         const success_data = try allocator.dupe(u8, data);
         errdefer allocator.free(success_data);
+
+        std.debug.print("warned: {d}\n", .{@sizeOf([256]u1)});
 
         const success_address = @intFromPtr(success_data.ptr);
         const success = @as(*XSetupSuccess, @ptrFromInt(success_address));
@@ -116,15 +119,15 @@ pub const Server = struct {
         });
     }
 
-    pub fn readMessage(this: Server) !void {
+    pub fn readMessage(this: *Server) !void {
         var buffer: [32]u8 = undefined;
+        const address = @intFromPtr(&buffer);
         const reader = this.connection.stream.reader();
 
         _ = try reader.readAll(buffer[0..]);
 
         switch (buffer[0]) {
-            0 => {
-                const address = @intFromPtr(&buffer);
+            @intFromEnum(MessageCode.@"error") => {
                 const err = @as(*XMessageError, @ptrFromInt(address)).*;
                 const code = @tagName(err.code);
                 const major = err.major_opcode;
@@ -135,7 +138,85 @@ pub const Server = struct {
                 log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
                 return error.X11ErrorMessage;
             },
-            else => {},
+            @intFromEnum(MessageCode.event_focus_in) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XFocusIn, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const wid = event.window_id;
+
+                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+            },
+            @intFromEnum(MessageCode.event_focus_out) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XFocusOut, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const wid = event.window_id;
+
+                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+            },
+            @intFromEnum(MessageCode.event_keymap_notify) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XKeymapNotify, @ptrFromInt(address)).*;
+
+                log.debug("[x] {s}: {any}", .{ name, event.keys });
+            },
+            @intFromEnum(MessageCode.event_expose) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XExpose, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const wid = event.window_id;
+                const x = event.x;
+                const y = event.y;
+                const w = event.width;
+                const h = event.height;
+
+                log.debug("[{d}] {s} (wid: {d}) {d},{d};{d}x{d}", .{ seq, name, wid, x, y, w, h });
+            },
+            @intFromEnum(MessageCode.event_visbility_notify) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XVisibilityNotify, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const wid = event.window_id;
+
+                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+            },
+            @intFromEnum(MessageCode.event_map_notify) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XMapNotify, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const eid = event.event_window_id;
+                const wid = event.window_id;
+
+                log.debug("[{d}] {s} (wid: {d} eid: {d})", .{ seq, name, wid, eid });
+            },
+            @intFromEnum(MessageCode.event_reparent_notify) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XReparentNotify, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const eid = event.event_window_id;
+                const wid = event.window_id;
+                const pid = event.parent_window_id;
+
+                log.debug("[{d}] {s} (wid: {d} eid: {d} pid: {d})", .{ seq, name, wid, eid, pid });
+            },
+            @intFromEnum(MessageCode.event_property_notify) => {
+                const name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+                const event = @as(*XPropertyNotify, @ptrFromInt(address)).*;
+                const seq = event.sequence_number;
+                const state = @tagName(event.state);
+                const wid = event.window_id;
+                const aid = event.atom_id;
+
+                log.debug("[{d}] {s} (wid: {d} aid: {d}) {s}", .{ seq, name, wid, aid, state });
+            },
+            else => {
+                const bit: u256 = 1;
+
+                if (0 == (this.warned >> buffer[0]) & bit) {
+                    this.warned = this.warned | (bit << buffer[0]);
+                    log.warn("ignoring unsupporeted event {d}: {any}", .{ buffer[0], buffer });
+                }
+            },
         }
     }
 
@@ -306,8 +387,83 @@ const XMessageError = extern struct {
     unused: [21]u8 = [1]u8{0} ** 21,
 };
 
-const XMessageEvent = extern struct {
-    code: MessageCode,
+const XFocusIn = extern struct {
+    message_code: MessageCode = .event_focus_in,
+    detail: FocusDetail,
+    sequence_number: u16,
+    window_id: u32,
+    mode: FocusMode,
+    unused: [23]u8 = [1]u8{0} ** 23,
+};
+
+const XFocusOut = extern struct {
+    message_code: MessageCode = .event_focus_out,
+    detail: FocusDetail,
+    sequence_number: u16,
+    window_id: u32,
+    mode: FocusMode,
+    unused: [23]u8 = [1]u8{0} ** 23,
+};
+
+const XKeymapNotify = extern struct {
+    message_code: MessageCode = .event_keymap_notify,
+    keys: [31]u8 = [1]u8{0} ** 31,
+};
+
+const XExpose = extern struct {
+    message_code: MessageCode = .event_expose,
+    unused_1: u8,
+    sequence_number: u16,
+    window_id: u32,
+    x: u16,
+    y: u16,
+    width: u16,
+    height: u16,
+    count: u16,
+    unused_2: [14]u8 = [1]u8{0} ** 14,
+};
+
+const XVisibilityNotify = extern struct {
+    message_code: MessageCode = .event_visbility_notify,
+    unused_1: u8,
+    sequence_number: u16,
+    window_id: u32,
+    state: VisibilityChangeState,
+    unused_2: [23]u8 = [1]u8{0} ** 23,
+};
+
+const XMapNotify = extern struct {
+    message_code: MessageCode = .event_map_notify,
+    unused_1: u8,
+    sequence_number: u16,
+    event_window_id: u32,
+    window_id: u32,
+    override_redirect: Bool,
+    unused_2: [19]u8 = [1]u8{0} ** 19,
+};
+
+const XReparentNotify = extern struct {
+    message_code: MessageCode = .event_reparent_notify,
+    unused_1: u8,
+    sequence_number: u16,
+    event_window_id: u32,
+    window_id: u32,
+    parent_window_id: u32,
+    x: i16,
+    y: i16,
+    override_redirect: Bool,
+    unused_2: [11]u8 = [1]u8{0} ** 11,
+};
+
+const XPropertyNotify = extern struct {
+    message_code: MessageCode = .event_property_notify,
+    unused_1: u8,
+    sequence_number: u16,
+    window_id: u32,
+    atom_id: u32,
+    timestamp: u32,
+    state: PropertyChangeState,
+    unused_2: [15]u8 = [1]u8{0} ** 15,
 };
 
 const XPixelFormat = extern struct {
@@ -331,7 +487,7 @@ const XScreen = extern struct {
     max_installed_maps: u16,
     root_visual: u32,
     backing_stores: BackingStores,
-    save_unders: SaveUnders,
+    save_unders: Bool,
     root_depth: u8,
     num_depths: u8,
 };
@@ -385,6 +541,11 @@ pub const BackingStores = enum(u8) {
     always,
 };
 
+pub const Bool = enum(u8) {
+    no,
+    yes,
+};
+
 pub const ErrorCode = enum(u8) {
     request = 1,
     value,
@@ -403,6 +564,24 @@ pub const ErrorCode = enum(u8) {
     name,
     length,
     implementation,
+};
+
+pub const FocusDetail = enum(u8) {
+    ancestor,
+    virtual,
+    inferior,
+    nonlinear,
+    nonlinear_virtual,
+    pointer,
+    pointer_root,
+    none,
+};
+
+pub const FocusMode = enum(u8) {
+    normal,
+    grab,
+    ungrab,
+    while_grabbed,
 };
 
 pub const MessageCode = enum(u8) {
@@ -441,6 +620,11 @@ pub const MessageCode = enum(u8) {
     event_colormap_notify,
     event_client_message,
     event_mapping_notify,
+};
+
+pub const PropertyChangeState = enum(u8) {
+    new_value,
+    deleted,
 };
 
 pub const Protocol = enum(u8) {
@@ -585,15 +769,16 @@ pub const RequestOpcode = enum(u8) {
     no_operation = 127,
 };
 
-pub const SaveUnders = enum(u8) {
-    no,
-    yes,
-};
-
 pub const SetupState = enum(u8) {
     failure,
     success,
     authenticate,
+};
+
+pub const VisibilityChangeState = enum(u8) {
+    unobscured,
+    partially_obscured,
+    fully_obscured,
 };
 
 pub const VisualClass = enum(u8) {
