@@ -1,6 +1,7 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
 const event = @import("x11-event.zig");
+const res = @import("x11-resource.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
 
@@ -18,7 +19,7 @@ pub const Server = struct {
     root_window_id: u32,
     root_visual_id: u32,
     vendor: []u8,
-    formats: []XPixelFormat,
+    formats: []res.PixelFormat,
     success_data: []u8,
     success: *setup.Success,
     // TODO: move these to Connection
@@ -39,7 +40,7 @@ pub const Server = struct {
         const vendor = vendor_data[0..success.vendor_len];
         const formats_data = vendor_data[x_pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
-        const formats_ptr: [*]XPixelFormat = @ptrFromInt(formats_address);
+        const formats_ptr: [*]res.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
         const screen = first_success_screen(success) orelse {
@@ -364,50 +365,6 @@ const XMessageError = extern struct {
     minor_opcode: u16,
     major_opcode: u8,
     unused: [21]u8 = [1]u8{0} ** 21,
-};
-
-const XPixelFormat = extern struct {
-    depth: u8,
-    bits_per_pixel: u8,
-    scanline_pad: u8,
-    unused: [5]u8 = [1]u8{0} ** 5,
-};
-
-const XScreen = extern struct {
-    root: u32,
-    default_colormap: u32,
-    white_pixel: u32,
-    black_pixel: u32,
-    current_input_masks: Events,
-    width_in_pixels: u16,
-    height_in_pixels: u16,
-    width_in_millimeters: u16,
-    height_in_millimeters: u16,
-    min_installed_maps: u16,
-    max_installed_maps: u16,
-    root_visual: u32,
-    backing_stores: BackingStores,
-    save_unders: Bool,
-    root_depth: u8,
-    num_depths: u8,
-};
-
-const XDepth = extern struct {
-    depth: u8,
-    unused_1: u8,
-    num_visuals: u16,
-    unused_2: u32,
-};
-
-const XVisual = extern struct {
-    visual_id: u32,
-    class: VisualClass,
-    bits_per_rgb_value: u8,
-    colormap_entries: u16,
-    red_mask: u32,
-    green_mask: u32,
-    blue_mask: u32,
-    unused: u32,
 };
 
 const XCreateWindow = extern struct {
@@ -759,13 +716,13 @@ pub const WindowAttributes = packed struct(u32) {
 
 // buffer reading helpers
 
-inline fn first_success_screen(success: *setup.Success) ?*XScreen {
+inline fn first_success_screen(success: *setup.Success) ?*res.Screen {
     if (success.num_screens > 0) {
         var address = @intFromPtr(success);
 
         address += @sizeOf(setup.Success);
         address += x_pad(u16, success.vendor_len);
-        address += success.num_formats * @sizeOf(XPixelFormat);
+        address += success.num_formats * @sizeOf(res.PixelFormat);
 
         return @ptrFromInt(address);
     } else {
@@ -773,17 +730,17 @@ inline fn first_success_screen(success: *setup.Success) ?*XScreen {
     }
 }
 
-inline fn first_screen_depth(screen: *XScreen) ?*XDepth {
+inline fn first_screen_depth(screen: *res.Screen) ?*res.Depth {
     if (screen.num_depths > 0) {
-        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(XScreen));
+        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(res.Screen));
     } else {
         return null;
     }
 }
 
-inline fn first_depth_visual(depth: *XDepth) ?*XVisual {
+inline fn first_depth_visual(depth: *res.Depth) ?*res.Visual {
     if (depth.num_visuals > 0) {
-        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(XDepth));
+        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(res.Depth));
     } else {
         return null;
     }
