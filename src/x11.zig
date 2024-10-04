@@ -3,8 +3,12 @@ const setup = @import("x11-setup.zig");
 const event = @import("x11-event.zig");
 const res = @import("x11-resource.zig");
 const req = @import("x11-request.zig");
+const msg = @import("x11-message.zig");
+const util = @import("x11-util.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
+
+pub const log = std.log.scoped(.x11);
 
 const Connection = struct {
     protocol: Protocol,
@@ -39,22 +43,22 @@ pub const Server = struct {
         const success = @as(*setup.Success, @ptrFromInt(success_address));
         const vendor_data = success_data[@sizeOf(setup.Success)..];
         const vendor = vendor_data[0..success.vendor_len];
-        const formats_data = vendor_data[x_pad(u16, success.vendor_len)..];
+        const formats_data = vendor_data[util.x_pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
         const formats_ptr: [*]res.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
-        const screen = first_success_screen(success) orelse {
+        const screen = util.first_success_screen(success) orelse {
             log.err("success has no screens", .{});
             return error.X11ProtocolError;
         };
 
-        const depth = first_screen_depth(screen) orelse {
+        const depth = util.first_screen_depth(screen) orelse {
             log.err("screen has no depths", .{});
             return error.X11ProtocolError;
         };
 
-        const visual = first_depth_visual(depth) orelse {
+        const visual = util.first_depth_visual(depth) orelse {
             log.err("depth has no visuals", .{});
             return error.X11ProtocolError;
         };
@@ -109,7 +113,7 @@ pub const Server = struct {
             .y = y,
             .width = width,
             .height = height,
-            .class = WindowClass.input_output,
+            .class = req.WindowClass.input_output,
             .value_mask = .{
                 .background_pixel = true,
                 .event_mask = true,
@@ -120,7 +124,10 @@ pub const Server = struct {
         try writer.writeInt(u32, 0xff000000, endian);
 
         // event_mask
-        try writer.writeStruct(Events{ .exposure = true, .key_press = true });
+        try writer.writeStruct(res.EventSet{
+            .exposure = true,
+            .key_press = true,
+        });
 
         return window_id;
     }
@@ -149,12 +156,12 @@ pub const Server = struct {
         _ = try reader.readAll(buffer[0..]);
 
         if (buffer[0] > 1 and buffer[0] <= 35) {
-            name = @tagName(@as(MessageCode, @enumFromInt(buffer[0])));
+            name = @tagName(@as(msg.Code, @enumFromInt(buffer[0])));
         }
 
         switch (buffer[0]) {
-            @intFromEnum(MessageCode.@"error") => {
-                const err = @as(*XMessageError, @ptrFromInt(address)).*;
+            @intFromEnum(msg.Code.@"error") => {
+                const err = @as(*msg.Error, @ptrFromInt(address)).*;
                 const code = @tagName(err.error_code);
                 const major = err.major_opcode;
                 const minor = err.minor_opcode;
@@ -164,26 +171,26 @@ pub const Server = struct {
                 log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
                 return error.X11ErrorMessage;
             },
-            @intFromEnum(MessageCode.focus_in) => {
+            @intFromEnum(msg.Code.focus_in) => {
                 const evt = @as(*event.FocusIn, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.focus_out) => {
+            @intFromEnum(msg.Code.focus_out) => {
                 const evt = @as(*event.FocusOut, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.keymap_notify) => {
+            @intFromEnum(msg.Code.keymap_notify) => {
                 const evt = @as(*event.KeymapNotify, @ptrFromInt(address)).*;
 
                 log.debug("[x] {s}: {any}", .{ name, evt.keys });
             },
-            @intFromEnum(MessageCode.expose) => {
+            @intFromEnum(msg.Code.expose) => {
                 const evt = @as(*event.Expose, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const wid = evt.window_id;
@@ -194,14 +201,14 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d}) {d},{d};{d}x{d}", .{ seq, name, wid, x, y, w, h });
             },
-            @intFromEnum(MessageCode.visbility_notify) => {
+            @intFromEnum(msg.Code.visbility_notify) => {
                 const evt = @as(*event.VisibilityNotify, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
-            @intFromEnum(MessageCode.map_notify) => {
+            @intFromEnum(msg.Code.map_notify) => {
                 const evt = @as(*event.MapNotify, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const eid = evt.event_window_id;
@@ -209,7 +216,7 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d})", .{ seq, name, wid, eid });
             },
-            @intFromEnum(MessageCode.reparent_notify) => {
+            @intFromEnum(msg.Code.reparent_notify) => {
                 const evt = @as(*event.ReparentNotify, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const eid = evt.event_window_id;
@@ -218,7 +225,7 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d} pid: {d})", .{ seq, name, wid, eid, pid });
             },
-            @intFromEnum(MessageCode.property_notify) => {
+            @intFromEnum(msg.Code.property_notify) => {
                 const evt = @as(*event.PropertyNotify, @ptrFromInt(address)).*;
                 const seq = evt.sequence_number;
                 const state = @tagName(evt.state);
@@ -356,115 +363,6 @@ pub fn verify_atoms(comptime atoms: anytype) void {
     // }
 }
 
-// protocol structs
-
-const XMessageError = extern struct {
-    code: MessageCode = .@"error",
-    error_code: ErrorCode,
-    sequence_number: u16,
-    data: u32,
-    minor_opcode: u16,
-    major_opcode: u8,
-    unused: [21]u8 = [1]u8{0} ** 21,
-};
-
-// enums
-
-pub const BackingStores = enum(u8) {
-    never,
-    when_mapped,
-    always,
-};
-
-pub const Bool = enum(u8) {
-    no,
-    yes,
-};
-
-pub const ErrorCode = enum(u8) {
-    request = 1,
-    value,
-    window,
-    pixmap,
-    atom,
-    cursor,
-    font,
-    match,
-    drawable,
-    access,
-    alloc,
-    colormap,
-    gcontext,
-    idchoice,
-    name,
-    length,
-    implementation,
-};
-
-pub const FocusDetail = enum(u8) {
-    ancestor,
-    virtual,
-    inferior,
-    nonlinear,
-    nonlinear_virtual,
-    pointer,
-    pointer_root,
-    none,
-};
-
-pub const FocusMode = enum(u8) {
-    normal,
-    grab,
-    ungrab,
-    while_grabbed,
-};
-
-pub const MessageCode = enum(u8) {
-    // XMessageError, 32 bytes
-    @"error" = 0,
-    // generic reply, 32 bytes + additional data
-    reply = 1,
-    // events, 32 bytes each
-    key_press = 2,
-    key_release,
-    button_press,
-    button_release,
-    motion_notify,
-    enter_notify,
-    leave_notify,
-    focus_in,
-    focus_out,
-    keymap_notify,
-    expose,
-    graphics_exposure,
-    no_exposure,
-    visbility_notify,
-    create_notify,
-    destroy_notify,
-    unmap_notify,
-    map_notify,
-    map_request,
-    reparent_notify,
-    configure_notify,
-    configure_request,
-    gravity_notify,
-    resize_request,
-    circulate_notify,
-    circulate_request,
-    property_notify,
-    selection_clear,
-    selection_request,
-    selection_notify,
-    colormap_notify,
-    client_message,
-    mapping_notify,
-};
-
-pub const PropertyChangeState = enum(u8) {
-    new_value,
-    deleted,
-};
-
 pub const Protocol = enum(u8) {
     unknown,
     unix,
@@ -483,136 +381,3 @@ pub const Protocol = enum(u8) {
         };
     }
 };
-
-pub const VisibilityChangeState = enum(u8) {
-    unobscured,
-    partially_obscured,
-    fully_obscured,
-};
-
-pub const VisualClass = enum(u8) {
-    static_gray,
-    gray_scale,
-    static_color,
-    pseudo_color,
-    true_color,
-    direct_color,
-};
-
-pub const WindowClass = enum(u16) {
-    copy_from_parent,
-    input_output,
-    input_only,
-};
-
-// namespaces?
-
-pub const Visual = struct {
-    pub const copy_from_parent: u32 = 0;
-};
-
-// bit fields
-
-pub const Events = packed struct(u32) {
-    key_press: bool = true,
-    key_release: bool = true,
-    button_press: bool = true,
-    button_release: bool = true,
-    enter_window: bool = true,
-    leave_window: bool = true,
-    pointer_motion: bool = true,
-    pointer_motion_hint: bool = true,
-    button_1_motion: bool = true,
-    button_2_motion: bool = true,
-    button_3_motion: bool = true,
-    button_4_motion: bool = true,
-    button_5_motion: bool = true,
-    button_motion: bool = true,
-    keymap_state: bool = true,
-    exposure: bool = true,
-    visibility_change: bool = true,
-    structure_notify: bool = true,
-    resize_redirect: bool = true,
-    substructure_notify: bool = true,
-    substructure_redirect: bool = true,
-    focus_change: bool = true,
-    property_change: bool = true,
-    colormap_change: bool = true,
-    owner_grab_button: bool = true,
-    unused: u7 = 0,
-};
-
-pub const WindowAttributes = packed struct(u32) {
-    background_pixmap: bool = false,
-    background_pixel: bool = false,
-    border_pixmap: bool = false,
-    border_pixel: bool = false,
-    bit_gravity: bool = false,
-    win_gravity: bool = false,
-    backing_store: bool = false,
-    backing_planes: bool = false,
-    backing_pixel: bool = false,
-    override_redirect: bool = false,
-    save_under: bool = false,
-    event_mask: bool = false,
-    do_not_propogate_mask: bool = false,
-    colormap: bool = false,
-    cursor: bool = false,
-    unused: u17 = 0,
-};
-
-// buffer reading helpers
-
-inline fn first_success_screen(success: *setup.Success) ?*res.Screen {
-    if (success.num_screens > 0) {
-        var address = @intFromPtr(success);
-
-        address += @sizeOf(setup.Success);
-        address += x_pad(u16, success.vendor_len);
-        address += success.num_formats * @sizeOf(res.PixelFormat);
-
-        return @ptrFromInt(address);
-    } else {
-        return null;
-    }
-}
-
-inline fn first_screen_depth(screen: *res.Screen) ?*res.Depth {
-    if (screen.num_depths > 0) {
-        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(res.Screen));
-    } else {
-        return null;
-    }
-}
-
-inline fn first_depth_visual(depth: *res.Depth) ?*res.Visual {
-    if (depth.num_visuals > 0) {
-        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(res.Depth));
-    } else {
-        return null;
-    }
-}
-
-inline fn read16(buffer: *const [@divExact(@typeInfo(u16).int.bits, 8)]u8) u16 {
-    return std.mem.readInt(u16, buffer, endian);
-}
-
-inline fn read32(buffer: *const [@divExact(@typeInfo(u32).int.bits, 8)]u8) u32 {
-    return std.mem.readInt(u32, buffer, endian);
-}
-
-fn copyStruct(comptime T: type, buffer: []const u8) T {
-    if (buffer.len >= @sizeOf(T)) {
-        return @as(*T, @ptrFromInt(@intFromPtr(buffer.ptr))).*;
-    } else {
-        @panic("buffer not large enough for type");
-    }
-}
-
-inline fn x_pad(comptime T: type, len: T) T {
-    return len + ((4 - (len % 4)) % 4);
-}
-
-// X11 logger
-
-pub const log = std.log.scoped(.x11);

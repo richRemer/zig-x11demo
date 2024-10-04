@@ -1,4 +1,5 @@
 const x11 = @import("x11.zig");
+const res = @import("x11-resource.zig");
 
 pub const CreateWindow = extern struct {
     opcode: Opcode = .create_window,
@@ -11,14 +12,16 @@ pub const CreateWindow = extern struct {
     width: u16 = 200,
     height: u16 = 300,
     border_width: u16 = 0,
-    class: x11.WindowClass = .copy_from_parent,
-    visual: u32 = x11.Visual.copy_from_parent,
-    value_mask: x11.WindowAttributes,
+    class: WindowClass = .copy_from_parent,
+    visual: u32 = CreateWindow.visual_copy_from_parent,
+    value_mask: WindowAttributes,
+
+    pub const visual_copy_from_parent: u32 = 0;
 };
 
 pub const InternAtom = extern struct {
     opcode: Opcode = .intern_atom,
-    only_if_exists: x11.Bool,
+    only_if_exists: bool,
     request_len: u16,
     name_len: u16,
     unused: u16,
@@ -29,6 +32,25 @@ pub const MapWindow = extern struct {
     unused: u8 = 0,
     request_len: u16 = 2,
     window_id: u32,
+};
+
+pub const WindowAttributes = packed struct(u32) {
+    background_pixmap: bool = false,
+    background_pixel: bool = false,
+    border_pixmap: bool = false,
+    border_pixel: bool = false,
+    bit_gravity: bool = false,
+    win_gravity: bool = false,
+    backing_store: bool = false,
+    backing_planes: bool = false,
+    backing_pixel: bool = false,
+    override_redirect: bool = false,
+    save_under: bool = false,
+    event_mask: bool = false,
+    do_not_propogate_mask: bool = false,
+    colormap: bool = false,
+    cursor: bool = false,
+    unused: u17 = 0,
 };
 
 pub const Opcode = enum(u8) {
@@ -152,4 +174,10 @@ pub const Opcode = enum(u8) {
     set_modifier_mapping,
     get_modifier_mapping,
     no_operation = 127,
+};
+
+pub const WindowClass = enum(u16) {
+    copy_from_parent,
+    input_output,
+    input_only,
 };
