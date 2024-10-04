@@ -2,6 +2,7 @@ const std = @import("std");
 const setup = @import("x11-setup.zig");
 const event = @import("x11-event.zig");
 const res = @import("x11-resource.zig");
+const req = @import("x11-request.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
 
@@ -91,7 +92,7 @@ pub const Server = struct {
         // TODO: q.v., XSetWMProtocols
 
         const flag_count = 2;
-        const request_len = @sizeOf(XCreateWindow) / 4 + flag_count;
+        const request_len = @sizeOf(req.CreateWindow) / 4 + flag_count;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
 
@@ -99,7 +100,7 @@ pub const Server = struct {
         defer this.write_mutex.unlock();
 
         // basic request info
-        try writer.writeStruct(XCreateWindow{
+        try writer.writeStruct(req.CreateWindow{
             .depth = 0, // TODO: figure out root window depth
             .request_len = request_len,
             .window_id = window_id,
@@ -130,7 +131,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(XMapWindow{
+        try writer.writeStruct(req.MapWindow{
             .window_id = window_id,
         });
     }
@@ -158,7 +159,7 @@ pub const Server = struct {
                 const major = err.major_opcode;
                 const minor = err.minor_opcode;
                 const seq = err.sequence_number;
-                const op = @tagName(@as(RequestOpcode, @enumFromInt(major)));
+                const op = @tagName(@as(req.Opcode, @enumFromInt(major)));
 
                 log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
                 return error.X11ErrorMessage;
@@ -367,37 +368,6 @@ const XMessageError = extern struct {
     unused: [21]u8 = [1]u8{0} ** 21,
 };
 
-const XCreateWindow = extern struct {
-    opcode: RequestOpcode = .create_window,
-    depth: u8,
-    request_len: u16,
-    window_id: u32,
-    parent_id: u32,
-    x: i16 = 50,
-    y: i16 = 50,
-    width: u16 = 200,
-    height: u16 = 300,
-    border_width: u16 = 0,
-    class: WindowClass = .copy_from_parent,
-    visual: u32 = Visual.copy_from_parent,
-    value_mask: WindowAttributes,
-};
-
-const XInternAtom = extern struct {
-    opcode: RequestOpcode = .intern_atom,
-    only_if_exists: Bool,
-    request_len: u16,
-    name_len: u16,
-    unused: u16,
-};
-
-const XMapWindow = extern struct {
-    opcode: RequestOpcode = .map_window,
-    unused: u8 = 0,
-    request_len: u16 = 2,
-    window_id: u32,
-};
-
 // enums
 
 pub const BackingStores = enum(u8) {
@@ -512,129 +482,6 @@ pub const Protocol = enum(u8) {
             .tcp, .inet, .inet6 => '/',
         };
     }
-};
-
-pub const RequestOpcode = enum(u8) {
-    create_window = 1,
-    change_window_attributes,
-    get_window_attributes,
-    destroy_window,
-    destroy_subwindows,
-    change_save_set,
-    reparent_window,
-    map_window,
-    map_subwindows,
-    unmap_window,
-    unmap_subwindows,
-    configure_window,
-    circulate_window,
-    get_geometry,
-    query_tree,
-    intern_atom,
-    get_atom_name,
-    change_property,
-    delete_property,
-    get_property,
-    list_properties,
-    set_selection_owner,
-    get_selection_owner,
-    convert_selection,
-    send_event,
-    grab_pointer,
-    ungrab_pointer,
-    grab_button,
-    ungrab_button,
-    change_active_pointer_grab,
-    grab_keyboard,
-    ungrab_keyboard,
-    grab_key,
-    ungrab_key,
-    allow_events,
-    grab_server,
-    ungrab_server,
-    query_pointer,
-    get_motion_events,
-    translate_coordinates,
-    warp_pointer,
-    set_input_focus,
-    get_input_focus,
-    query_keymap,
-    open_font,
-    close_font,
-    query_font,
-    query_text_extents,
-    list_fonts,
-    list_fonts_with_info,
-    set_font_path,
-    get_font_path,
-    create_pixmap,
-    free_pixmap,
-    create_gc,
-    change_gc,
-    copy_gc,
-    set_dashes,
-    set_clip_rectangles,
-    free_gc,
-    clear_area,
-    copy_area,
-    copy_plane,
-    poly_point,
-    poly_line,
-    poly_segment,
-    poly_rectangle,
-    poly_arc,
-    fill_poly,
-    poly_fill_rectangle,
-    poly_fill_arc,
-    put_image,
-    get_image,
-    poly_text_8,
-    poly_text_16,
-    image_text_8,
-    image_text_16,
-    create_colormap,
-    free_colormap,
-    copy_colormap_and_free,
-    install_colormap,
-    uninstall_colotmap,
-    list_installed_colormaps,
-    alloc_color,
-    alloc_named_color,
-    alloc_color_cells,
-    alloc_color_plances,
-    free_colors,
-    store_colors,
-    store_named_color,
-    query_colors,
-    lookup_color,
-    create_cursor,
-    create_glyph_cursor,
-    free_cursor,
-    recolor_cursor,
-    query_best_size,
-    query_extension,
-    list_extensions,
-    change_keyboard_mapping,
-    get_keyboard_mapping,
-    change_keyboard_control,
-    get_keyboard_control,
-    bell,
-    change_pointer_control,
-    get_pointer_control,
-    set_screen_saver,
-    get_screen_saver,
-    change_hosts,
-    list_hosts,
-    set_access_control,
-    set_close_down_mode,
-    kill_client,
-    rotate_properties,
-    force_screen_saver,
-    set_pointer_mapping,
-    get_pointer_mapping,
-    set_modifier_mapping,
-    get_modifier_mapping,
-    no_operation = 127,
 };
 
 pub const VisibilityChangeState = enum(u8) {
