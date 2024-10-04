@@ -1,5 +1,6 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
+const event = @import("x11-event.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
 
@@ -162,65 +163,65 @@ pub const Server = struct {
                 return error.X11ErrorMessage;
             },
             @intFromEnum(MessageCode.focus_in) => {
-                const event = @as(*XFocusIn, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const wid = event.window_id;
+                const evt = @as(*event.FocusIn, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
             @intFromEnum(MessageCode.focus_out) => {
-                const event = @as(*XFocusOut, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const wid = event.window_id;
+                const evt = @as(*event.FocusOut, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
             @intFromEnum(MessageCode.keymap_notify) => {
-                const event = @as(*XKeymapNotify, @ptrFromInt(address)).*;
+                const evt = @as(*event.KeymapNotify, @ptrFromInt(address)).*;
 
-                log.debug("[x] {s}: {any}", .{ name, event.keys });
+                log.debug("[x] {s}: {any}", .{ name, evt.keys });
             },
             @intFromEnum(MessageCode.expose) => {
-                const event = @as(*XExpose, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const wid = event.window_id;
-                const x = event.x;
-                const y = event.y;
-                const w = event.width;
-                const h = event.height;
+                const evt = @as(*event.Expose, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const wid = evt.window_id;
+                const x = evt.x;
+                const y = evt.y;
+                const w = evt.width;
+                const h = evt.height;
 
                 log.debug("[{d}] {s} (wid: {d}) {d},{d};{d}x{d}", .{ seq, name, wid, x, y, w, h });
             },
             @intFromEnum(MessageCode.visbility_notify) => {
-                const event = @as(*XVisibilityNotify, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const wid = event.window_id;
+                const evt = @as(*event.VisibilityNotify, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
             },
             @intFromEnum(MessageCode.map_notify) => {
-                const event = @as(*XMapNotify, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const eid = event.event_window_id;
-                const wid = event.window_id;
+                const evt = @as(*event.MapNotify, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const eid = evt.event_window_id;
+                const wid = evt.window_id;
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d})", .{ seq, name, wid, eid });
             },
             @intFromEnum(MessageCode.reparent_notify) => {
-                const event = @as(*XReparentNotify, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const eid = event.event_window_id;
-                const wid = event.window_id;
-                const pid = event.parent_window_id;
+                const evt = @as(*event.ReparentNotify, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const eid = evt.event_window_id;
+                const wid = evt.window_id;
+                const pid = evt.parent_window_id;
 
                 log.debug("[{d}] {s} (wid: {d} eid: {d} pid: {d})", .{ seq, name, wid, eid, pid });
             },
             @intFromEnum(MessageCode.property_notify) => {
-                const event = @as(*XPropertyNotify, @ptrFromInt(address)).*;
-                const seq = event.sequence_number;
-                const state = @tagName(event.state);
-                const wid = event.window_id;
-                const aid = event.atom_id;
+                const evt = @as(*event.PropertyNotify, @ptrFromInt(address)).*;
+                const seq = evt.sequence_number;
+                const state = @tagName(evt.state);
+                const wid = evt.window_id;
+                const aid = evt.atom_id;
 
                 log.debug("[{d}] {s} (wid: {d} aid: {d}) {s}", .{ seq, name, wid, aid, state });
             },
@@ -363,85 +364,6 @@ const XMessageError = extern struct {
     minor_opcode: u16,
     major_opcode: u8,
     unused: [21]u8 = [1]u8{0} ** 21,
-};
-
-const XFocusIn = extern struct {
-    code: MessageCode = .focus_in,
-    detail: FocusDetail,
-    sequence_number: u16,
-    window_id: u32,
-    mode: FocusMode,
-    unused: [23]u8 = [1]u8{0} ** 23,
-};
-
-const XFocusOut = extern struct {
-    code: MessageCode = .focus_out,
-    detail: FocusDetail,
-    sequence_number: u16,
-    window_id: u32,
-    mode: FocusMode,
-    unused: [23]u8 = [1]u8{0} ** 23,
-};
-
-const XKeymapNotify = extern struct {
-    code: MessageCode = .keymap_notify,
-    keys: [31]u8 = [1]u8{0} ** 31,
-};
-
-const XExpose = extern struct {
-    code: MessageCode = .expose,
-    unused_1: u8,
-    sequence_number: u16,
-    window_id: u32,
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
-    count: u16,
-    unused_2: [14]u8 = [1]u8{0} ** 14,
-};
-
-const XVisibilityNotify = extern struct {
-    code: MessageCode = .visbility_notify,
-    unused_1: u8,
-    sequence_number: u16,
-    window_id: u32,
-    state: VisibilityChangeState,
-    unused_2: [23]u8 = [1]u8{0} ** 23,
-};
-
-const XMapNotify = extern struct {
-    code: MessageCode = .map_notify,
-    unused_1: u8,
-    sequence_number: u16,
-    event_window_id: u32,
-    window_id: u32,
-    override_redirect: Bool,
-    unused_2: [19]u8 = [1]u8{0} ** 19,
-};
-
-const XReparentNotify = extern struct {
-    code: MessageCode = .reparent_notify,
-    unused_1: u8,
-    sequence_number: u16,
-    event_window_id: u32,
-    window_id: u32,
-    parent_window_id: u32,
-    x: i16,
-    y: i16,
-    override_redirect: Bool,
-    unused_2: [11]u8 = [1]u8{0} ** 11,
-};
-
-const XPropertyNotify = extern struct {
-    code: MessageCode = .property_notify,
-    unused_1: u8,
-    sequence_number: u16,
-    window_id: u32,
-    atom_id: u32,
-    timestamp: u32,
-    state: PropertyChangeState,
-    unused_2: [15]u8 = [1]u8{0} ** 15,
 };
 
 const XPixelFormat = extern struct {
