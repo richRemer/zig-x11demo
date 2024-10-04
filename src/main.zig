@@ -8,7 +8,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     const connection = try x11.connect(.unix, "/tmp/.X11-unix/X", 0, 0);
 
-    var server = try x11.setup(allocator, connection);
+    var server = try x11.handshake(allocator, connection);
     defer server.deinit();
 
     const window_id = try server.createWindow(0, 0, 100, 100);

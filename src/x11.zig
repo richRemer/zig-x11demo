@@ -1,4 +1,5 @@
 const std = @import("std");
+const setup = @import("x11-setup.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
 
@@ -18,8 +19,10 @@ pub const Server = struct {
     vendor: []u8,
     formats: []XPixelFormat,
     success_data: []u8,
-    success: *XSetupSuccess,
-    warned: u256 = 0,
+    success: *setup.Success,
+    // TODO: move these to Connection
+    read_mutex: std.Thread.Mutex = .{},
+    write_mutex: std.Thread.Mutex = .{},
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -29,11 +32,9 @@ pub const Server = struct {
         const success_data = try allocator.dupe(u8, data);
         errdefer allocator.free(success_data);
 
-        std.debug.print("warned: {d}\n", .{@sizeOf([256]u1)});
-
         const success_address = @intFromPtr(success_data.ptr);
-        const success = @as(*XSetupSuccess, @ptrFromInt(success_address));
-        const vendor_data = success_data[@sizeOf(XSetupSuccess)..];
+        const success = @as(*setup.Success, @ptrFromInt(success_address));
+        const vendor_data = success_data[@sizeOf(setup.Success)..];
         const vendor = vendor_data[0..success.vendor_len];
         const formats_data = vendor_data[x_pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
@@ -80,10 +81,20 @@ pub const Server = struct {
         width: u16,
         height: u16,
     ) !u32 {
+        // TODO: lookup/manage Atoms
+        // TODO: e.g., WM_DELETE_WINDOW is an Atom
+        // TODO: must be set in "WM_PROTOCOLS" (also an Atom)
+        // TODO: q.v., https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
+        // TODO: q.v., XInternAtom
+        // TODO: q.v., XSetWMProtocols
+
         const flag_count = 2;
         const request_len = @sizeOf(XCreateWindow) / 4 + flag_count;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
 
         // basic request info
         try writer.writeStruct(XCreateWindow{
@@ -111,8 +122,11 @@ pub const Server = struct {
         return window_id;
     }
 
-    pub fn mapWindow(this: Server, window_id: u32) !void {
+    pub fn mapWindow(this: *Server, window_id: u32) !void {
         const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
 
         try writer.writeStruct(XMapWindow{
             .window_id = window_id,
@@ -125,6 +139,9 @@ pub const Server = struct {
 
         const address = @intFromPtr(&buffer);
         const reader = this.connection.stream.reader();
+
+        this.read_mutex.lock();
+        defer this.read_mutex.unlock();
 
         _ = try reader.readAll(buffer[0..]);
 
@@ -207,14 +224,7 @@ pub const Server = struct {
 
                 log.debug("[{d}] {s} (wid: {d} aid: {d}) {s}", .{ seq, name, wid, aid, state });
             },
-            else => {
-                const bit: u256 = 1;
-
-                if (0 == (this.warned >> buffer[0]) & bit) {
-                    this.warned = this.warned | (bit << buffer[0]);
-                    log.warn("ignoring unsupported event {d}: {any}", .{ buffer[0], buffer });
-                }
-            },
+            else => {},
         }
     }
 
@@ -261,21 +271,24 @@ pub fn connectTCP(host: []const u8, display: u8, screen: u8) !Connection {
     return error.X11NotImplemented;
 }
 
-pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
+pub fn handshake(
+    allocator: std.mem.Allocator,
+    connection: Connection,
+) !Server {
     const reader = connection.stream.reader();
     const writer = connection.stream.writer();
 
-    try writer.writeStruct(XSetupRequest{});
+    try writer.writeStruct(setup.Request{});
 
     // first couple bytes of response have status and length of data
-    const header_len = @sizeOf(XSetupHeader);
+    const header_len = @sizeOf(setup.Header);
     const header_data = try allocator.alloc(u8, header_len);
     defer allocator.free(header_data);
 
     _ = try reader.readAll(header_data);
 
     const header_address = @intFromPtr(header_data.ptr);
-    const header = @as(*XSetupHeader, @ptrFromInt(header_address)).*;
+    const header = @as(*setup.Header, @ptrFromInt(header_address)).*;
     const success_len = header_len + header.data_len * 4;
     const success_data = try allocator.alloc(u8, success_len);
     defer allocator.free(success_data);
@@ -292,7 +305,7 @@ pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
             return error.X11AccessDenied;
         },
         .failure => {
-            const failure = @as(*XSetupFailure, @ptrFromInt(header_address));
+            const failure = @as(*setup.Failure, @ptrFromInt(header_address));
             const reason_data = success_data[header_len..];
             const reason = reason_data[0..failure.reason_len];
 
@@ -306,7 +319,7 @@ pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
         },
         .success => {
             const success_address = @intFromPtr(success_data.ptr);
-            const success = @as(*XSetupSuccess, @ptrFromInt(success_address));
+            const success = @as(*setup.Success, @ptrFromInt(success_address));
 
             log.debug("connected to X{d} (rev. {d})", .{
                 success.protocol_major_version,
@@ -318,62 +331,29 @@ pub fn setup(allocator: std.mem.Allocator, connection: Connection) !Server {
     }
 }
 
+pub fn verify_atoms(comptime atoms: anytype) void {
+    const name_buffer: [32]u8 = [1]u8{0} ** 32;
+    const Atoms = @TypeOf(atoms);
+    const atoms_info = @typeInfo(Atoms);
+
+    if (atoms_info != .@"struct" or !atoms_info.@"struct".is_tuple) {
+        @compileError("expected tuple argument, found " ++ @typeName(Atoms));
+    }
+
+    inline for (atoms_info.@"struct".fields) |field| {
+        if (field.type != @Type(.enum_literal)) {
+            @compileError("'" ++ field.name ++ "' is not an enum literal");
+        } else if (field.name.len > name_buffer.len) {
+            @compileError("atom name '" ++ field.name ++ "' is too long");
+        }
+    }
+
+    // inline for (atoms_info.@"struct".fields) |field| {
+    //     _ = std.ascii.upperString(name, field.name);
+    // }
+}
+
 // protocol structs
-
-const XSetupRequest = extern struct {
-    byte_order: u8 = if (endian == .big) 0x42 else 0x6c,
-    pad0: u8 = 0,
-    protocol_major_version: u16 = Protocol.version,
-    protocol_minor_version: u16 = Protocol.revision,
-    authorization_protocol_name_len: u16 = 0,
-    authorization_protocol_data_len: u16 = 0,
-    pad1: u16 = 0,
-};
-
-const XSetupHeader = extern struct {
-    state: SetupState,
-    field_1: u8,
-    field_2: u16,
-    field_3: u16,
-    data_len: u16,
-};
-
-const XSetupAuthenticate = extern struct {
-    state: SetupState = .authenticate,
-    pad: [5]u8 = [_]u8{0} ** 5,
-    data_len: u16,
-};
-
-const XSetupFailure = extern struct {
-    state: SetupState = .failure,
-    reason_len: u8,
-    protocol_major_version: u16,
-    protocol_minor_version: u16,
-    data_len: u16,
-};
-
-const XSetupSuccess = extern struct {
-    state: SetupState = .success,
-    pad0: u8 = 0,
-    protocol_major_version: u16,
-    protocol_minor_version: u16,
-    data_len: u16,
-    release_number: u32,
-    resource_id_base: u32,
-    resource_id_mask: u32,
-    motion_buffer_size: u32,
-    vendor_len: u16,
-    maximum_request_len: u16,
-    num_screens: u8,
-    num_formats: u8,
-    image_byte_order: u8,
-    bitmap_format_bit_order: u8,
-    bitmap_format_scanline_unit: u8,
-    bitmap_format_scanline_pad: u8,
-    min_keycode: u8,
-    max_keycode: u8,
-    pad1: u32 = 0,
-};
 
 const XMessageError = extern struct {
     code: MessageCode = .@"error",
@@ -522,6 +502,14 @@ const XCreateWindow = extern struct {
     class: WindowClass = .copy_from_parent,
     visual: u32 = Visual.copy_from_parent,
     value_mask: WindowAttributes,
+};
+
+const XInternAtom = extern struct {
+    opcode: RequestOpcode = .intern_atom,
+    only_if_exists: Bool,
+    request_len: u16,
+    name_len: u16,
+    unused: u16,
 };
 
 const XMapWindow = extern struct {
@@ -770,12 +758,6 @@ pub const RequestOpcode = enum(u8) {
     no_operation = 127,
 };
 
-pub const SetupState = enum(u8) {
-    failure,
-    success,
-    authenticate,
-};
-
 pub const VisibilityChangeState = enum(u8) {
     unobscured,
     partially_obscured,
@@ -855,11 +837,11 @@ pub const WindowAttributes = packed struct(u32) {
 
 // buffer reading helpers
 
-inline fn first_success_screen(success: *XSetupSuccess) ?*XScreen {
+inline fn first_success_screen(success: *setup.Success) ?*XScreen {
     if (success.num_screens > 0) {
         var address = @intFromPtr(success);
 
-        address += @sizeOf(XSetupSuccess);
+        address += @sizeOf(setup.Success);
         address += x_pad(u16, success.vendor_len);
         address += success.num_formats * @sizeOf(XPixelFormat);
 
