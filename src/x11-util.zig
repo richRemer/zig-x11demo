@@ -8,7 +8,7 @@ pub inline fn first_success_screen(success: *setup.Success) ?*res.Screen {
         var address = @intFromPtr(success);
 
         address += @sizeOf(setup.Success);
-        address += x_pad(u16, success.vendor_len);
+        address += pad(u16, success.vendor_len);
         address += success.num_formats * @sizeOf(res.PixelFormat);
 
         return @ptrFromInt(address);
@@ -33,6 +33,6 @@ pub inline fn first_depth_visual(depth: *res.Depth) ?*res.Visual {
     }
 }
 
-pub inline fn x_pad(comptime T: type, len: T) T {
+pub inline fn pad(comptime T: type, len: T) T {
     return len + ((4 - (len % 4)) % 4);
 }
