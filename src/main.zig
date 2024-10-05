@@ -43,7 +43,7 @@ fn eventLoop(server: *x11.Server) u8 {
             running = false;
         }
 
-        server.readMessage() catch {
+        _ = server.readMessage() catch {
             x11.log.err("could not read message from X11 server", .{});
         };
     }

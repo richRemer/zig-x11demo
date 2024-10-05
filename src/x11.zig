@@ -140,7 +140,7 @@ pub const Server = struct {
         });
     }
 
-    pub fn readMessage(this: *Server) !void {
+    pub fn readMessage(this: *Server) !?msg.Message {
         var buffer: [32]u8 = undefined;
         var name: [:0]const u8 = "";
 
@@ -158,80 +158,53 @@ pub const Server = struct {
 
         switch (buffer[0]) {
             @intFromEnum(msg.Code.@"error") => {
-                const err = @as(*msg.Error, @ptrFromInt(address)).*;
-                const code = @tagName(err.error_code);
-                const major = err.major_opcode;
-                const minor = err.minor_opcode;
-                const seq = err.sequence_number;
-                const op = @tagName(@as(req.Opcode, @enumFromInt(major)));
-
-                log.err("[{d}] {s}/{d} {s} error", .{ seq, op, minor, code });
-                return error.X11ErrorMessage;
+                return msg.Message{
+                    .@"error" = @as(*msg.Error, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.focus_in) => {
-                const evt = @as(*event.FocusIn, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const wid = evt.window_id;
-
-                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+                return msg.Message{
+                    .focus_in = @as(*event.FocusIn, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.focus_out) => {
-                const evt = @as(*event.FocusOut, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const wid = evt.window_id;
-
-                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+                return msg.Message{
+                    .focus_out = @as(*event.FocusOut, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.keymap_notify) => {
-                const evt = @as(*event.KeymapNotify, @ptrFromInt(address)).*;
-
-                log.debug("[x] {s}: {any}", .{ name, evt.keys });
+                return msg.Message{
+                    .keymap_notify = @as(*event.KeymapNotify, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.expose) => {
-                const evt = @as(*event.Expose, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const wid = evt.window_id;
-                const x = evt.x;
-                const y = evt.y;
-                const w = evt.width;
-                const h = evt.height;
-
-                log.debug("[{d}] {s} (wid: {d}) {d},{d};{d}x{d}", .{ seq, name, wid, x, y, w, h });
+                return msg.Message{
+                    .expose = @as(*event.Expose, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.visbility_notify) => {
-                const evt = @as(*event.VisibilityNotify, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const wid = evt.window_id;
-
-                log.debug("[{d}] {s} (wid: {d})", .{ seq, name, wid });
+                return msg.Message{
+                    .visbility_notify = @as(*event.VisibilityNotify, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.map_notify) => {
-                const evt = @as(*event.MapNotify, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const eid = evt.event_window_id;
-                const wid = evt.window_id;
-
-                log.debug("[{d}] {s} (wid: {d} eid: {d})", .{ seq, name, wid, eid });
+                return msg.Message{
+                    .map_notify = @as(*event.MapNotify, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.reparent_notify) => {
-                const evt = @as(*event.ReparentNotify, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const eid = evt.event_window_id;
-                const wid = evt.window_id;
-                const pid = evt.parent_window_id;
-
-                log.debug("[{d}] {s} (wid: {d} eid: {d} pid: {d})", .{ seq, name, wid, eid, pid });
+                return msg.Message{
+                    .reparent_notify = @as(*event.ReparentNotify, @ptrFromInt(address)).*,
+                };
             },
             @intFromEnum(msg.Code.property_notify) => {
-                const evt = @as(*event.PropertyNotify, @ptrFromInt(address)).*;
-                const seq = evt.sequence_number;
-                const state = @tagName(evt.state);
-                const wid = evt.window_id;
-                const aid = evt.atom_id;
-
-                log.debug("[{d}] {s} (wid: {d} aid: {d}) {s}", .{ seq, name, wid, aid, state });
+                return msg.Message{
+                    .property_notify = @as(*event.PropertyNotify, @ptrFromInt(address)).*,
+                };
             },
-            else => {},
+            else => {
+                return null;
+            },
         }
     }
 

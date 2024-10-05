@@ -140,7 +140,7 @@ pub const Opcode = enum(u8) {
     alloc_color,
     alloc_named_color,
     alloc_color_cells,
-    alloc_color_plances,
+    alloc_color_planes,
     free_colors,
     store_colors,
     store_named_color,
