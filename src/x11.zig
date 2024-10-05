@@ -96,7 +96,7 @@ pub const Server = struct {
         // TODO: q.v., XSetWMProtocols
 
         const flag_count = 2;
-        const request_len = @sizeOf(req.CreateWindow) / 4 + flag_count;
+        const request_len = @sizeOf(req.CreateWindowRequest) / 4 + flag_count;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
 
@@ -104,7 +104,7 @@ pub const Server = struct {
         defer this.write_mutex.unlock();
 
         // basic request info
-        try writer.writeStruct(req.CreateWindow{
+        try writer.writeStruct(req.CreateWindowRequest{
             .depth = 0, // TODO: figure out root window depth
             .request_len = request_len,
             .window_id = window_id,
@@ -135,7 +135,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(req.MapWindow{
+        try writer.writeStruct(req.MapWindowRequest{
             .window_id = window_id,
         });
     }
@@ -164,42 +164,42 @@ pub const Server = struct {
             },
             @intFromEnum(msg.Code.focus_in) => {
                 return msg.Message{
-                    .focus_in = @as(*event.FocusIn, @ptrFromInt(address)).*,
+                    .focus_in = @as(*event.FocusInEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.focus_out) => {
                 return msg.Message{
-                    .focus_out = @as(*event.FocusOut, @ptrFromInt(address)).*,
+                    .focus_out = @as(*event.FocusOutEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.keymap_notify) => {
                 return msg.Message{
-                    .keymap_notify = @as(*event.KeymapNotify, @ptrFromInt(address)).*,
+                    .keymap_notify = @as(*event.KeymapNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.expose) => {
                 return msg.Message{
-                    .expose = @as(*event.Expose, @ptrFromInt(address)).*,
+                    .expose = @as(*event.ExposeEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.visbility_notify) => {
                 return msg.Message{
-                    .visbility_notify = @as(*event.VisibilityNotify, @ptrFromInt(address)).*,
+                    .visbility_notify = @as(*event.VisibilityNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.map_notify) => {
                 return msg.Message{
-                    .map_notify = @as(*event.MapNotify, @ptrFromInt(address)).*,
+                    .map_notify = @as(*event.MapNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.reparent_notify) => {
                 return msg.Message{
-                    .reparent_notify = @as(*event.ReparentNotify, @ptrFromInt(address)).*,
+                    .reparent_notify = @as(*event.ReparentNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
             @intFromEnum(msg.Code.property_notify) => {
                 return msg.Message{
-                    .property_notify = @as(*event.PropertyNotify, @ptrFromInt(address)).*,
+                    .property_notify = @as(*event.PropertyNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
             else => {

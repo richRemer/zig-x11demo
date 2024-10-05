@@ -1,7 +1,7 @@
 const x11 = @import("x11.zig");
 const res = @import("x11-resource.zig");
 
-pub const CreateWindow = extern struct {
+pub const CreateWindowRequest = extern struct {
     opcode: Opcode = .create_window,
     depth: u8,
     request_len: u16,
@@ -13,13 +13,13 @@ pub const CreateWindow = extern struct {
     height: u16 = 300,
     border_width: u16 = 0,
     class: WindowClass = .copy_from_parent,
-    visual: u32 = CreateWindow.visual_copy_from_parent,
+    visual: u32 = CreateWindowRequest.visual_copy_from_parent,
     value_mask: WindowAttributes,
 
     pub const visual_copy_from_parent: u32 = 0;
 };
 
-pub const InternAtom = extern struct {
+pub const InternAtomRequest = extern struct {
     opcode: Opcode = .intern_atom,
     only_if_exists: bool,
     request_len: u16,
@@ -27,7 +27,7 @@ pub const InternAtom = extern struct {
     unused: u16,
 };
 
-pub const MapWindow = extern struct {
+pub const MapWindowRequest = extern struct {
     opcode: Opcode = .map_window,
     unused: u8 = 0,
     request_len: u16 = 2,

@@ -1,7 +1,7 @@
 const res = @import("x11-resource.zig");
 const msg = @import("x11-message.zig");
 
-pub const GetWindowAttributes = extern struct {
+pub const GetWindowAttributesReply = extern struct {
     code: msg.Code = .reply,
     backing_store: BackingStore,
     sequence_number: u16,
@@ -23,7 +23,7 @@ pub const GetWindowAttributes = extern struct {
     unused: u16 = 0,
 };
 
-pub const GetGeometry = extern struct {
+pub const GetGeometryReply = extern struct {
     code: msg.Code = .reply,
     depth: u8,
     sequence_number: u16,
@@ -37,7 +37,7 @@ pub const GetGeometry = extern struct {
     unused: [10]u8 = [1]u8{0} ** 10,
 };
 
-pub const QueryTree = extern struct {
+pub const QueryTreeReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -48,7 +48,7 @@ pub const QueryTree = extern struct {
     unused_2: [14]u8 = [1]u8{0} ** 14,
 };
 
-pub const InternAtom = extern struct {
+pub const InternAtomReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -57,7 +57,7 @@ pub const InternAtom = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const GetAtomName = extern struct {
+pub const GetAtomNameReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -66,7 +66,7 @@ pub const GetAtomName = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const GetProperty = extern struct {
+pub const GetPropertyReply = extern struct {
     code: msg.Code = .reply,
     format: u8,
     sequence_number: u16,
@@ -77,7 +77,7 @@ pub const GetProperty = extern struct {
     unused: [12]u8 = [1]u8{0} ** 12,
 };
 
-pub const ListProperties = extern struct {
+pub const ListPropertiesReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -86,7 +86,7 @@ pub const ListProperties = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const GetSelectionOwner = extern struct {
+pub const GetSelectionOwnerReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -95,7 +95,7 @@ pub const GetSelectionOwner = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const GrabPointer = extern struct {
+pub const GrabPointerReply = extern struct {
     code: msg.Code = .reply,
     status: GrabStatus,
     sequence_number: u16,
@@ -103,7 +103,7 @@ pub const GrabPointer = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const GrabKeyboard = extern struct {
+pub const GrabKeyboardReply = extern struct {
     code: msg.Code = .reply,
     status: GrabStatus,
     sequence_number: u16,
@@ -111,7 +111,7 @@ pub const GrabKeyboard = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const QueryPointer = extern struct {
+pub const QueryPointerReply = extern struct {
     code: msg.Code = .reply,
     same_screen: bool,
     sequence_number: u16,
@@ -126,7 +126,7 @@ pub const QueryPointer = extern struct {
     unused: [6]u8 = [1]u8{0} ** 6,
 };
 
-pub const GetMotionEvents = extern struct {
+pub const GetMotionEventsReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -135,7 +135,7 @@ pub const GetMotionEvents = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const TranslateCoordinates = extern struct {
+pub const TranslateCoordinatesReply = extern struct {
     code: msg.Code = .reply,
     same_screen: bool,
     sequence_number: u16,
@@ -146,7 +146,7 @@ pub const TranslateCoordinates = extern struct {
     unused: [16]u8 = [1]u8{0} ** 16,
 };
 
-pub const GetInputFocus = extern struct {
+pub const GetInputFocusReply = extern struct {
     code: msg.Code = .reply,
     revert_to: FocusRevertTo,
     sequence_number: u16,
@@ -155,7 +155,7 @@ pub const GetInputFocus = extern struct {
     unused: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const QueryKeymap = extern struct {
+pub const QueryKeymapReply = extern struct {
     code: msg.Code = .reply,
     unused: u8,
     sequence_number: u16,
@@ -163,7 +163,7 @@ pub const QueryKeymap = extern struct {
     keys: [32]u8 = [1]u8{0} ** 32,
 };
 
-pub const QueryFont = extern struct {
+pub const QueryFontReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -185,7 +185,7 @@ pub const QueryFont = extern struct {
     num_char_infos: u32,
 };
 
-pub const QueryTextExtents = extern struct {
+pub const QueryTextExtentsReply = extern struct {
     code: msg.Code = .reply,
     draw_direction: DrawDirection,
     sequence_number: u16,
@@ -200,7 +200,7 @@ pub const QueryTextExtents = extern struct {
     unused: u32,
 };
 
-pub const ListFonts = extern struct {
+pub const ListFontsReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -209,7 +209,7 @@ pub const ListFonts = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const ListFontsWithInfo = extern struct {
+pub const ListFontsWithInfoReply = extern struct {
     code: msg.Code = .reply,
     name_len: u8,
     sequence_number: u16,
@@ -231,7 +231,9 @@ pub const ListFontsWithInfo = extern struct {
     replies_hint: u32,
 };
 
-pub const ListFontsWithInfoSentinel = extern struct {
+// TODO: determine naming for sentinel
+
+pub const ListFontsWithInfoReplySentinel = extern struct {
     code: msg.Code = .reply,
     last_reply_indicator: u8 = 0,
     sequence_number: u16,
@@ -239,7 +241,7 @@ pub const ListFontsWithInfoSentinel = extern struct {
     unused: [52]u8 = [1]u8{0} ** 52,
 };
 
-pub const GetFontPath = extern struct {
+pub const GetFontPathReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -248,7 +250,7 @@ pub const GetFontPath = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const GetImage = extern struct {
+pub const GetImageReply = extern struct {
     code: msg.Code = .reply,
     depth: u8,
     sequence_number: u16,
@@ -257,7 +259,7 @@ pub const GetImage = extern struct {
     unused: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const ListInstalledColormaps = extern struct {
+pub const ListInstalledColormapsReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -266,7 +268,7 @@ pub const ListInstalledColormaps = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const AllocColor = extern struct {
+pub const AllocColorReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -279,7 +281,7 @@ pub const AllocColor = extern struct {
     unused_3: [12]u8 = [1]u8{0} ** 12,
 };
 
-pub const AllocNamedColor = extern struct {
+pub const AllocNamedColorReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -294,7 +296,7 @@ pub const AllocNamedColor = extern struct {
     unused_2: u64,
 };
 
-pub const AllocColorCells = extern struct {
+pub const AllocColorCellsReply = extern struct {
     code: msg.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
@@ -304,7 +306,7 @@ pub const AllocColorCells = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const AllocColorPlanes = extern struct {
+pub const AllocColorPlanesReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -317,7 +319,7 @@ pub const AllocColorPlanes = extern struct {
     unused_3: u64,
 };
 
-pub const QueryColors = extern struct {
+pub const QueryColorsReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -326,7 +328,7 @@ pub const QueryColors = extern struct {
     unused_2: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const LookupColor = extern struct {
+pub const LookupColorReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -340,7 +342,7 @@ pub const LookupColor = extern struct {
     unused_2: [12]u8 = [1]u8{0} ** 12,
 };
 
-pub const QueryBestSize = extern struct {
+pub const QueryBestSizeReply = extern struct {
     code: msg.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
@@ -350,7 +352,7 @@ pub const QueryBestSize = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const QueryExtension = extern struct {
+pub const QueryExtensionReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -362,7 +364,7 @@ pub const QueryExtension = extern struct {
     unused_2: [20]u8 = [1]u8{0} ** 20,
 };
 
-pub const ListExtensions = extern struct {
+pub const ListExtensionsReply = extern struct {
     code: msg.Code = .reply,
     num_names: u8,
     sequence_number: u16,
@@ -370,7 +372,7 @@ pub const ListExtensions = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const GetKeyboardMapping = extern struct {
+pub const GetKeyboardMappingReply = extern struct {
     code: msg.Code = .reply,
     keysyms_per_keycode: u8,
     sequence_number: u16,
@@ -378,7 +380,7 @@ pub const GetKeyboardMapping = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const GetKeyboardControl = extern struct {
+pub const GetKeyboardControlReply = extern struct {
     code: msg.Code = .reply,
     global_auto_repeat: AutoRepeat,
     sequence_number: u16,
@@ -391,7 +393,7 @@ pub const GetKeyboardControl = extern struct {
     unused: u16,
 };
 
-pub const GetPointerControl = extern struct {
+pub const GetPointerControlReply = extern struct {
     code: msg.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
@@ -402,7 +404,7 @@ pub const GetPointerControl = extern struct {
     unused_2: [18]u8 = [1]u8{0} ** 18,
 };
 
-pub const GetScreenSaver = extern struct {
+pub const GetScreenSaverReply = extern struct {
     code: msg.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
@@ -414,7 +416,7 @@ pub const GetScreenSaver = extern struct {
     unused_2: [18]u8 = [1]u8{0} ** 18,
 };
 
-pub const ListHosts = extern struct {
+pub const ListHostsReply = extern struct {
     code: msg.Code = .reply,
     mode: ListHostsMode,
     sequence_number: u16,
@@ -423,7 +425,7 @@ pub const ListHosts = extern struct {
     unused: [22]u8 = [1]u8{0} ** 22,
 };
 
-pub const SetPointerMapping = extern struct {
+pub const SetPointerMappingReply = extern struct {
     code: msg.Code = .reply,
     status: PointerMappingStatus,
     sequence_number: u16,
@@ -431,7 +433,7 @@ pub const SetPointerMapping = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const GetPointerMapping = extern struct {
+pub const GetPointerMappingReply = extern struct {
     code: msg.Code = .reply,
     map_len: u8,
     sequence_number: u16,
@@ -439,7 +441,7 @@ pub const GetPointerMapping = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const SetModifierMapping = extern struct {
+pub const SetModifierMappingReply = extern struct {
     code: msg.Code = .reply,
     status: ModifierMappingStatus,
     sequence_number: u16,
@@ -447,7 +449,7 @@ pub const SetModifierMapping = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-pub const GetModifierMapping = extern struct {
+pub const GetModifierMappingReply = extern struct {
     code: msg.Code = .reply,
     keycodes_per_modifier: u8,
     sequence_number: u16,

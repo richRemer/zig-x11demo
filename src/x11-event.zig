@@ -1,6 +1,6 @@
 const msg = @import("x11-message.zig");
 
-pub const FocusIn = extern struct {
+pub const FocusInEvent = extern struct {
     code: msg.Code = .focus_in,
     detail: FocusDetail,
     sequence_number: u16,
@@ -9,7 +9,7 @@ pub const FocusIn = extern struct {
     unused: [23]u8 = [1]u8{0} ** 23,
 };
 
-pub const FocusOut = extern struct {
+pub const FocusOutEvent = extern struct {
     code: msg.Code = .focus_out,
     detail: FocusDetail,
     sequence_number: u16,
@@ -18,12 +18,12 @@ pub const FocusOut = extern struct {
     unused: [23]u8 = [1]u8{0} ** 23,
 };
 
-pub const KeymapNotify = extern struct {
+pub const KeymapNotifyEvent = extern struct {
     code: msg.Code = .keymap_notify,
     keys: [31]u8 = [1]u8{0} ** 31,
 };
 
-pub const Expose = extern struct {
+pub const ExposeEvent = extern struct {
     code: msg.Code = .expose,
     unused_1: u8,
     sequence_number: u16,
@@ -36,7 +36,7 @@ pub const Expose = extern struct {
     unused_2: [14]u8 = [1]u8{0} ** 14,
 };
 
-pub const VisibilityNotify = extern struct {
+pub const VisibilityNotifyEvent = extern struct {
     code: msg.Code = .visbility_notify,
     unused_1: u8,
     sequence_number: u16,
@@ -45,7 +45,7 @@ pub const VisibilityNotify = extern struct {
     unused_2: [23]u8 = [1]u8{0} ** 23,
 };
 
-pub const MapNotify = extern struct {
+pub const MapNotifyEvent = extern struct {
     code: msg.Code = .map_notify,
     unused_1: u8,
     sequence_number: u16,
@@ -55,7 +55,7 @@ pub const MapNotify = extern struct {
     unused_2: [19]u8 = [1]u8{0} ** 19,
 };
 
-pub const ReparentNotify = extern struct {
+pub const ReparentNotifyEvent = extern struct {
     code: msg.Code = .reparent_notify,
     unused_1: u8,
     sequence_number: u16,
@@ -68,7 +68,7 @@ pub const ReparentNotify = extern struct {
     unused_2: [11]u8 = [1]u8{0} ** 11,
 };
 
-pub const PropertyNotify = extern struct {
+pub const PropertyNotifyEvent = extern struct {
     code: msg.Code = .property_notify,
     unused_1: u8,
     sequence_number: u16,
