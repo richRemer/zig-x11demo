@@ -20,7 +20,11 @@ pub fn main() !void {
 }
 
 fn handleMessage(message: x11.Message) void {
-    std.debug.print("{any}\n", .{message});
+    switch (message) {
+        .@"error" => |err| std.log.err("{any}", .{err}),
+        .reply => unreachable,
+        else => {},
+    }
 }
 
 fn eventLoop(server: *x11.Server) u8 {

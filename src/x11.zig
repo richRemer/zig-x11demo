@@ -2,8 +2,10 @@ const std = @import("std");
 const setup = @import("x11-setup.zig");
 const io = @import("x11-io.zig");
 const util = @import("x11-util.zig");
+const arch = @import("builtin").cpu.arch;
 const assert = std.debug.assert;
-const endian = @import("builtin").cpu.arch.endian();
+const fromPtr = util.fromPtr;
+const pad = util.pad;
 
 pub const log = std.log.scoped(.x11);
 pub const Message = io.Message;
@@ -42,7 +44,7 @@ pub const Server = struct {
         const success = @as(*setup.Success, @ptrFromInt(success_address));
         const vendor_data = success_data[@sizeOf(setup.Success)..];
         const vendor = vendor_data[0..success.vendor_len];
-        const formats_data = vendor_data[util.pad(u16, success.vendor_len)..];
+        const formats_data = vendor_data[pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
         const formats_ptr: [*]io.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
@@ -126,7 +128,7 @@ pub const Server = struct {
         });
 
         // background_pixel
-        try writer.writeInt(u32, 0xff000000, endian);
+        try writer.writeInt(u32, 0xff000000, arch.endian());
 
         // enable all events
         try writer.writeStruct(io.EventSet.all);
@@ -149,7 +151,6 @@ pub const Server = struct {
         var buffer: [32]u8 = undefined;
         var name: [:0]const u8 = "";
 
-        const address = @intFromPtr(&buffer);
         const reader = this.connection.stream.reader();
 
         this.read_mutex.lock();
@@ -163,31 +164,31 @@ pub const Server = struct {
 
         const message: ?Message = switch (buffer[0]) {
             @intFromEnum(io.Code.@"error") => Message{
-                .@"error" = @as(*io.Error, @ptrFromInt(address)).*,
+                .@"error" = fromPtr(io.Error, &buffer),
             },
             @intFromEnum(io.Code.focus_in) => Message{
-                .focus_in = @as(*io.FocusInEvent, @ptrFromInt(address)).*,
+                .focus_in = fromPtr(io.FocusInEvent, &buffer),
             },
             @intFromEnum(io.Code.focus_out) => Message{
-                .focus_out = @as(*io.FocusOutEvent, @ptrFromInt(address)).*,
+                .focus_out = fromPtr(io.FocusOutEvent, &buffer),
             },
             @intFromEnum(io.Code.keymap_notify) => Message{
-                .keymap_notify = @as(*io.KeymapNotifyEvent, @ptrFromInt(address)).*,
+                .keymap_notify = fromPtr(io.KeymapNotifyEvent, &buffer),
             },
             @intFromEnum(io.Code.expose) => Message{
-                .expose = @as(*io.ExposeEvent, @ptrFromInt(address)).*,
+                .expose = fromPtr(io.ExposeEvent, &buffer),
             },
             @intFromEnum(io.Code.visbility_notify) => Message{
-                .visbility_notify = @as(*io.VisibilityNotifyEvent, @ptrFromInt(address)).*,
+                .visbility_notify = fromPtr(io.VisibilityNotifyEvent, &buffer),
             },
             @intFromEnum(io.Code.map_notify) => Message{
-                .map_notify = @as(*io.MapNotifyEvent, @ptrFromInt(address)).*,
+                .map_notify = fromPtr(io.MapNotifyEvent, &buffer),
             },
             @intFromEnum(io.Code.reparent_notify) => Message{
-                .reparent_notify = @as(*io.ReparentNotifyEvent, @ptrFromInt(address)).*,
+                .reparent_notify = fromPtr(io.ReparentNotifyEvent, &buffer),
             },
             @intFromEnum(io.Code.property_notify) => Message{
-                .property_notify = @as(*io.PropertyNotifyEvent, @ptrFromInt(address)).*,
+                .property_notify = fromPtr(io.PropertyNotifyEvent, &buffer),
             },
             else => null,
         };
@@ -256,8 +257,7 @@ pub fn handshake(
 
     _ = try reader.readAll(header_data);
 
-    const header_address = @intFromPtr(header_data.ptr);
-    const header = @as(*setup.Header, @ptrFromInt(header_address)).*;
+    const header = fromPtr(setup.Header, header_data.ptr);
     const success_len = header_len + header.data_len * 4;
     const success_data = try allocator.alloc(u8, success_len);
     defer allocator.free(success_data);
@@ -274,7 +274,7 @@ pub fn handshake(
             return error.X11AccessDenied;
         },
         .failure => {
-            const failure = @as(*setup.Failure, @ptrFromInt(header_address));
+            const failure = fromPtr(setup.Failure, header_data.ptr);
             const reason_data = success_data[header_len..];
             const reason = reason_data[0..failure.reason_len];
 
@@ -287,8 +287,7 @@ pub fn handshake(
             return error.X11ProtocolError;
         },
         .success => {
-            const success_address = @intFromPtr(success_data.ptr);
-            const success = @as(*setup.Success, @ptrFromInt(success_address));
+            const success = fromPtr(setup.Success, success_data.ptr);
 
             log.debug("connected to X{d} (rev. {d})", .{
                 success.protocol_major_version,

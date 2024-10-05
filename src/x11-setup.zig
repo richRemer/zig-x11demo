@@ -1,8 +1,8 @@
 const Protocol = @import("x11.zig").Protocol;
-const endian = @import("builtin").cpu.arch.endian();
+const arch = @import("builtin").cpu.arch;
 
 pub const Request = extern struct {
-    byte_order: u8 = if (endian == .big) 0x42 else 0x6c,
+    byte_order: u8 = if (arch.endian() == .big) 0x42 else 0x6c,
     pad0: u8 = 0,
     protocol_major_version: u16 = Protocol.version,
     protocol_minor_version: u16 = Protocol.revision,

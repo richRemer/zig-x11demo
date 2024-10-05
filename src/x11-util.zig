@@ -1,7 +1,6 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
 const io = @import("x11-io.zig");
-const endian = @import("builtin").cpu.arch.endian();
 
 pub inline fn first_success_screen(success: *setup.Success) ?*io.Screen {
     if (success.num_screens > 0) {
@@ -35,4 +34,9 @@ pub inline fn first_depth_visual(depth: *io.Depth) ?*io.Visual {
 
 pub inline fn pad(comptime T: type, len: T) T {
     return len + ((4 - (len % 4)) % 4);
+}
+
+pub fn fromPtr(comptime T: type, ptr: anytype) T {
+    const address = @intFromPtr(ptr);
+    return @as(*T, @ptrFromInt(address)).*;
 }
