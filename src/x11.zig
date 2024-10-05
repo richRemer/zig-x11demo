@@ -1,9 +1,6 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
-const event = @import("x11-event.zig");
-const res = @import("x11-resource.zig");
-const req = @import("x11-request.zig");
-const msg = @import("x11-message.zig");
+const io = @import("x11-io.zig");
 const util = @import("x11-util.zig");
 const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
@@ -24,7 +21,7 @@ pub const Server = struct {
     root_window_id: u32,
     root_visual_id: u32,
     vendor: []u8,
-    formats: []res.PixelFormat,
+    formats: []io.PixelFormat,
     success_data: []u8,
     success: *setup.Success,
     // TODO: move these to Connection
@@ -45,7 +42,7 @@ pub const Server = struct {
         const vendor = vendor_data[0..success.vendor_len];
         const formats_data = vendor_data[util.pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
-        const formats_ptr: [*]res.PixelFormat = @ptrFromInt(formats_address);
+        const formats_ptr: [*]io.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
         const screen = util.first_success_screen(success) orelse {
@@ -96,7 +93,7 @@ pub const Server = struct {
         // TODO: q.v., XSetWMProtocols
 
         const flag_count = 2;
-        const request_len = @sizeOf(req.CreateWindowRequest) / 4 + flag_count;
+        const request_len = @sizeOf(io.CreateWindowRequest) / 4 + flag_count;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
 
@@ -104,7 +101,7 @@ pub const Server = struct {
         defer this.write_mutex.unlock();
 
         // basic request info
-        try writer.writeStruct(req.CreateWindowRequest{
+        try writer.writeStruct(io.CreateWindowRequest{
             .depth = 0, // TODO: figure out root window depth
             .request_len = request_len,
             .window_id = window_id,
@@ -113,7 +110,7 @@ pub const Server = struct {
             .y = y,
             .width = width,
             .height = height,
-            .class = req.WindowClass.input_output,
+            .class = io.CreateWindowClass.input_output,
             .value_mask = .{
                 .background_pixel = true,
                 .event_mask = true,
@@ -124,7 +121,7 @@ pub const Server = struct {
         try writer.writeInt(u32, 0xff000000, endian);
 
         // enable all events
-        try writer.writeStruct(res.EventSet.all);
+        try writer.writeStruct(io.EventSet.all);
 
         return window_id;
     }
@@ -135,12 +132,12 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(req.MapWindowRequest{
+        try writer.writeStruct(io.MapWindowRequest{
             .window_id = window_id,
         });
     }
 
-    pub fn readMessage(this: *Server) !?msg.Message {
+    pub fn readMessage(this: *Server) !?io.Message {
         var buffer: [32]u8 = undefined;
         var name: [:0]const u8 = "";
 
@@ -153,58 +150,56 @@ pub const Server = struct {
         _ = try reader.readAll(buffer[0..]);
 
         if (buffer[0] > 1 and buffer[0] <= 35) {
-            name = @tagName(@as(msg.Code, @enumFromInt(buffer[0])));
+            name = @tagName(@as(io.Code, @enumFromInt(buffer[0])));
         }
 
         switch (buffer[0]) {
-            @intFromEnum(msg.Code.@"error") => {
-                return msg.Message{
-                    .@"error" = @as(*msg.Error, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.@"error") => {
+                return io.Message{
+                    .@"error" = @as(*io.Error, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.focus_in) => {
-                return msg.Message{
-                    .focus_in = @as(*event.FocusInEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.focus_in) => {
+                return io.Message{
+                    .focus_in = @as(*io.FocusInEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.focus_out) => {
-                return msg.Message{
-                    .focus_out = @as(*event.FocusOutEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.focus_out) => {
+                return io.Message{
+                    .focus_out = @as(*io.FocusOutEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.keymap_notify) => {
-                return msg.Message{
-                    .keymap_notify = @as(*event.KeymapNotifyEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.keymap_notify) => {
+                return io.Message{
+                    .keymap_notify = @as(*io.KeymapNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.expose) => {
-                return msg.Message{
-                    .expose = @as(*event.ExposeEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.expose) => {
+                return io.Message{
+                    .expose = @as(*io.ExposeEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.visbility_notify) => {
-                return msg.Message{
-                    .visbility_notify = @as(*event.VisibilityNotifyEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.visbility_notify) => {
+                return io.Message{
+                    .visbility_notify = @as(*io.VisibilityNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.map_notify) => {
-                return msg.Message{
-                    .map_notify = @as(*event.MapNotifyEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.map_notify) => {
+                return io.Message{
+                    .map_notify = @as(*io.MapNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.reparent_notify) => {
-                return msg.Message{
-                    .reparent_notify = @as(*event.ReparentNotifyEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.reparent_notify) => {
+                return io.Message{
+                    .reparent_notify = @as(*io.ReparentNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
-            @intFromEnum(msg.Code.property_notify) => {
-                return msg.Message{
-                    .property_notify = @as(*event.PropertyNotifyEvent, @ptrFromInt(address)).*,
+            @intFromEnum(io.Code.property_notify) => {
+                return io.Message{
+                    .property_notify = @as(*io.PropertyNotifyEvent, @ptrFromInt(address)).*,
                 };
             },
-            else => {
-                return null;
-            },
+            else => return null,
         }
     }
 

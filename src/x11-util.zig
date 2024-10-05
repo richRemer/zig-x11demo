@@ -1,15 +1,15 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
-const res = @import("x11-resource.zig");
+const io = @import("x11-io.zig");
 const endian = @import("builtin").cpu.arch.endian();
 
-pub inline fn first_success_screen(success: *setup.Success) ?*res.Screen {
+pub inline fn first_success_screen(success: *setup.Success) ?*io.Screen {
     if (success.num_screens > 0) {
         var address = @intFromPtr(success);
 
         address += @sizeOf(setup.Success);
         address += pad(u16, success.vendor_len);
-        address += success.num_formats * @sizeOf(res.PixelFormat);
+        address += success.num_formats * @sizeOf(io.PixelFormat);
 
         return @ptrFromInt(address);
     } else {
@@ -17,17 +17,17 @@ pub inline fn first_success_screen(success: *setup.Success) ?*res.Screen {
     }
 }
 
-pub inline fn first_screen_depth(screen: *res.Screen) ?*res.Depth {
+pub inline fn first_screen_depth(screen: *io.Screen) ?*io.Depth {
     if (screen.num_depths > 0) {
-        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(res.Screen));
+        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(io.Screen));
     } else {
         return null;
     }
 }
 
-pub inline fn first_depth_visual(depth: *res.Depth) ?*res.Visual {
+pub inline fn first_depth_visual(depth: *io.Depth) ?*io.Visual {
     if (depth.num_visuals > 0) {
-        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(res.Depth));
+        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(io.Depth));
     } else {
         return null;
     }
