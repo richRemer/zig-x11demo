@@ -23,6 +23,7 @@ fn handleMessage(message: x11.Message) void {
     switch (message) {
         .@"error" => |err| std.log.err("{any}", .{err}),
         .reply => unreachable,
+        .client_message => |evt| std.log.debug("{any}", .{evt}),
         else => {},
     }
 }

@@ -190,6 +190,9 @@ pub const Server = struct {
             @intFromEnum(io.Code.property_notify) => Message{
                 .property_notify = fromPtr(io.PropertyNotifyEvent, &buffer),
             },
+            @intFromEnum(io.Code.client_message) => Message{
+                .client_message = fromPtr(io.ClientMessageEvent, &buffer),
+            },
             else => null,
         };
 

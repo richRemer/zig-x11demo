@@ -693,8 +693,23 @@ pub const Message = union(Code) {
     selection_request: GenericEvent,
     selection_notify: GenericEvent,
     colormap_notify: GenericEvent,
-    client_message: GenericEvent,
+    client_message: ClientMessageEvent,
     mapping_notify: GenericEvent,
+};
+
+/// Generic Message structure that can be used when reading messages from an
+/// X11 server.  Should only be used internally before being cast to a more
+/// suitable type.
+pub const GenericMessage = extern struct {
+    code: Code,
+    data_1: u8,
+    /// This maps to sequence_number for all errors and replies, and MOST
+    /// events, but KeymapNotifyEvent is the odd man out.
+    data_2: u16,
+    data_3: u32,
+    data_4: u64,
+    data_5: u64,
+    data_6: u64,
 };
 
 /// X11 Error messages all follow the same basic structure.  Use .error_code
@@ -1311,6 +1326,8 @@ pub const GetModifierMappingReply = extern struct {
 pub const GenericEvent = extern struct {
     code: Code,
     data_1: u8,
+    /// This maps to sequence_number for MOST events, but KeymapNotifyEvent is
+    /// the odd man out.
     data_2: u16,
     data_3: u32,
     data_4: u64,
@@ -1395,4 +1412,31 @@ pub const PropertyNotifyEvent = extern struct {
     timestamp: u32,
     state: PropertyChangeState,
     unused_2: [15]u8 = [1]u8{0} ** 15,
+};
+
+pub const ClientMessageEvent = extern struct {
+    code: Code = .client_message,
+    format: u8,
+    sequence_number: u16,
+    window_id: u32,
+    type: u32,
+    data: [20]u8,
+
+    pub const Int16 = extern struct {
+        code: Code = .client_message,
+        format: u8 = 16,
+        sequence_number: u16,
+        window_id: u32,
+        type: u32,
+        data: [10]u16,
+    };
+
+    pub const Int32 = extern struct {
+        code: Code = .client_message,
+        format: u8 = 32,
+        sequence_number: u16,
+        window_id: u32,
+        type: u32,
+        data: [5]u32,
+    };
 };
