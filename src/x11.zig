@@ -123,11 +123,8 @@ pub const Server = struct {
         // background_pixel
         try writer.writeInt(u32, 0xff000000, endian);
 
-        // event_mask
-        try writer.writeStruct(res.EventSet{
-            .exposure = true,
-            .key_press = true,
-        });
+        // enable all events
+        try writer.writeStruct(res.EventSet.all);
 
         return window_id;
     }

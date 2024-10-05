@@ -90,6 +90,20 @@ pub const DeviceEventSet = packed struct(u32) {
     button_5_motion: bool = false,
     button_motion: bool = false,
     unused_3: u18 = 0,
+
+    pub const all: DeviceEventSet = .{
+        .key_press = true,
+        .key_release = true,
+        .button_press = true,
+        .button_release = true,
+        .pointer_motion = true,
+        .button_1_motion = true,
+        .button_2_motion = true,
+        .button_3_motion = true,
+        .button_4_motion = true,
+        .button_5_motion = true,
+        .button_motion = true,
+    };
 };
 
 pub const EventSet = packed struct(u32) {
@@ -119,6 +133,34 @@ pub const EventSet = packed struct(u32) {
     colormap_change: bool = false,
     owner_grab_button: bool = false,
     unused: u7 = 0,
+
+    pub const all: EventSet = .{
+        .key_press = true,
+        .key_release = true,
+        .button_press = true,
+        .button_release = true,
+        .enter_window = true,
+        .leave_window = true,
+        .pointer_motion = true,
+        .pointer_motion_hint = true,
+        .button_1_motion = true,
+        .button_2_motion = true,
+        .button_3_motion = true,
+        .button_4_motion = true,
+        .button_5_motion = true,
+        .button_motion = true,
+        .keymap_state = true,
+        .exposure = true,
+        .visibility_change = true,
+        .structure_notify = true,
+        .resize_redirect = true,
+        .substructure_notify = true,
+        .substructure_redirect = true,
+        .focus_change = true,
+        .property_change = true,
+        .colormap_change = true,
+        .owner_grab_button = true,
+    };
 };
 
 pub const KeyButtonSet = packed struct(u16) {
@@ -136,6 +178,22 @@ pub const KeyButtonSet = packed struct(u16) {
     button_4: bool = false,
     button_5: bool = false,
     unused: u3 = 0,
+
+    pub const KeyButtonSet = .{
+        .shift = true,
+        .lock = true,
+        .control = true,
+        .mod_1 = true,
+        .mod_2 = true,
+        .mod_3 = true,
+        .mod_4 = true,
+        .mod_5 = true,
+        .button_1 = true,
+        .button_2 = true,
+        .button_3 = true,
+        .button_4 = true,
+        .button_5 = true,
+    };
 };
 
 pub const KeySet = packed struct(u16) {
@@ -148,6 +206,17 @@ pub const KeySet = packed struct(u16) {
     mod_4: bool = false,
     mod_5: bool = false,
     unused: u8 = 0,
+
+    pub const all: KeySet = .{
+        .shift = true,
+        .lock = true,
+        .control = true,
+        .mod_1 = true,
+        .mod_2 = true,
+        .mod_3 = true,
+        .mod_4 = true,
+        .mod_5 = true,
+    };
 };
 
 pub const PointerEventSet = packed struct(u32) {
@@ -166,6 +235,22 @@ pub const PointerEventSet = packed struct(u32) {
     button_motion: bool = false,
     keymap_state: bool = false,
     unused_2: u17 = 0,
+
+    pub const all: PointerEventSet = .{
+        .button_press = true,
+        .button_release = true,
+        .enter_window = true,
+        .leave_window = true,
+        .pointer_motion = true,
+        .pointer_motion_hint = true,
+        .button_1_motion = true,
+        .button_2_motion = true,
+        .button_3_motion = true,
+        .button_4_motion = true,
+        .button_5_motion = true,
+        .button_motion = true,
+        .keymap_state = true,
+    };
 };
 
 pub const BackingStores = enum(u8) {
