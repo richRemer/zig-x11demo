@@ -10,12 +10,17 @@ pub fn main() !void {
 
     var server = try x11.handshake(allocator, connection);
     defer server.deinit();
+    _ = server.attachHandler(handleMessage);
 
     const window_id = try server.createWindow(0, 0, 100, 100);
     _ = try server.mapWindow(window_id);
 
     const status = eventLoop(&server);
     std.process.exit(status);
+}
+
+fn handleMessage(message: x11.Message) void {
+    std.debug.print("{any}\n", .{message});
 }
 
 fn eventLoop(server: *x11.Server) u8 {
@@ -43,7 +48,7 @@ fn eventLoop(server: *x11.Server) u8 {
             running = false;
         }
 
-        _ = server.readMessage() catch {
+        server.readMessage() catch {
             x11.log.err("could not read message from X11 server", .{});
         };
     }

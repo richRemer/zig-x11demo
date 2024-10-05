@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const endian = @import("builtin").cpu.arch.endian();
 
 pub const log = std.log.scoped(.x11);
+pub const Message = io.Message;
 
 const Connection = struct {
     protocol: Protocol,
@@ -17,6 +18,7 @@ const Connection = struct {
 pub const Server = struct {
     allocator: std.mem.Allocator,
     connection: Connection,
+    handler: ?*const fn (Message) void = null,
     global_id: u32 = 0,
     root_window_id: u32,
     root_visual_id: u32,
@@ -78,6 +80,12 @@ pub const Server = struct {
         this.allocator.free(this.success_data);
     }
 
+    pub fn attachHandler(this: *Server, handler: *const fn (Message) void) bool {
+        const removed = this.handler != null;
+        this.handler = handler;
+        return removed;
+    }
+
     pub fn createWindow(
         this: *Server,
         x: i16,
@@ -137,7 +145,7 @@ pub const Server = struct {
         });
     }
 
-    pub fn readMessage(this: *Server) !?io.Message {
+    pub fn readMessage(this: *Server) !void {
         var buffer: [32]u8 = undefined;
         var name: [:0]const u8 = "";
 
@@ -153,53 +161,39 @@ pub const Server = struct {
             name = @tagName(@as(io.Code, @enumFromInt(buffer[0])));
         }
 
-        switch (buffer[0]) {
-            @intFromEnum(io.Code.@"error") => {
-                return io.Message{
-                    .@"error" = @as(*io.Error, @ptrFromInt(address)).*,
-                };
+        const message: ?Message = switch (buffer[0]) {
+            @intFromEnum(io.Code.@"error") => Message{
+                .@"error" = @as(*io.Error, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.focus_in) => {
-                return io.Message{
-                    .focus_in = @as(*io.FocusInEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.focus_in) => Message{
+                .focus_in = @as(*io.FocusInEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.focus_out) => {
-                return io.Message{
-                    .focus_out = @as(*io.FocusOutEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.focus_out) => Message{
+                .focus_out = @as(*io.FocusOutEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.keymap_notify) => {
-                return io.Message{
-                    .keymap_notify = @as(*io.KeymapNotifyEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.keymap_notify) => Message{
+                .keymap_notify = @as(*io.KeymapNotifyEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.expose) => {
-                return io.Message{
-                    .expose = @as(*io.ExposeEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.expose) => Message{
+                .expose = @as(*io.ExposeEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.visbility_notify) => {
-                return io.Message{
-                    .visbility_notify = @as(*io.VisibilityNotifyEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.visbility_notify) => Message{
+                .visbility_notify = @as(*io.VisibilityNotifyEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.map_notify) => {
-                return io.Message{
-                    .map_notify = @as(*io.MapNotifyEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.map_notify) => Message{
+                .map_notify = @as(*io.MapNotifyEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.reparent_notify) => {
-                return io.Message{
-                    .reparent_notify = @as(*io.ReparentNotifyEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.reparent_notify) => Message{
+                .reparent_notify = @as(*io.ReparentNotifyEvent, @ptrFromInt(address)).*,
             },
-            @intFromEnum(io.Code.property_notify) => {
-                return io.Message{
-                    .property_notify = @as(*io.PropertyNotifyEvent, @ptrFromInt(address)).*,
-                };
+            @intFromEnum(io.Code.property_notify) => Message{
+                .property_notify = @as(*io.PropertyNotifyEvent, @ptrFromInt(address)).*,
             },
-            else => return null,
+            else => null,
+        };
+
+        if (message != null and this.handler != null) {
+            this.handler.?(message.?);
         }
     }
 
