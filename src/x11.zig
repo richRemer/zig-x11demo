@@ -10,6 +10,13 @@ const pad = util.pad;
 pub const log = std.log.scoped(.x11);
 pub const Message = io.Message;
 
+const GenericEvent = io.GenericEvent;
+const GenericMessage = io.GenericMessage;
+const GenericReply = io.GenericReply;
+
+/// Used by X11 to specify a missing resource ID.
+pub const none: u32 = 0;
+
 const Connection = struct {
     protocol: Protocol,
     stream: std.net.Stream,
@@ -24,13 +31,16 @@ pub const Server = struct {
     global_id: u32 = 0,
     root_window_id: u32,
     root_visual_id: u32,
+    reply_data: ?[]u8 = null,
+
+    // TODO: move these to Connection
+    read_mutex: std.Thread.Mutex = .{},
+    write_mutex: std.Thread.Mutex = .{},
+
     vendor: []u8,
     formats: []io.PixelFormat,
     success_data: []u8,
     success: *setup.Success,
-    // TODO: move these to Connection
-    read_mutex: std.Thread.Mutex = .{},
-    write_mutex: std.Thread.Mutex = .{},
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -79,6 +89,10 @@ pub const Server = struct {
     }
 
     pub fn deinit(this: Server) void {
+        if (this.reply_data != null) {
+            @panic("did not clean up last reply");
+        }
+
         this.allocator.free(this.success_data);
     }
 
@@ -102,18 +116,16 @@ pub const Server = struct {
         // TODO: q.v., XInternAtom
         // TODO: q.v., XSetWMProtocols
 
-        const flag_count = 2;
-        const request_len = @sizeOf(io.CreateWindowRequest) / 4 + flag_count;
+        const num_flags = 2;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
 
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        // basic request info
         try writer.writeStruct(io.CreateWindowRequest{
             .depth = 0, // TODO: figure out root window depth
-            .request_len = request_len,
+            .request_len = io.CreateWindowRequest.requestLen(num_flags),
             .window_id = window_id,
             .parent_id = this.root_window_id,
             .x = x,
@@ -127,13 +139,44 @@ pub const Server = struct {
             },
         });
 
-        // background_pixel
         try writer.writeInt(u32, 0xff000000, arch.endian());
-
-        // enable all events
         try writer.writeStruct(io.EventSet.all);
 
         return window_id;
+    }
+
+    pub fn internAtom(
+        this: *Server,
+        name: []const u8,
+        must_exist: bool,
+    ) !u32 {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(io.InternAtomRequest{
+            .only_if_exists = must_exist,
+            .request_len = io.InternAtomRequest.requestLen(name.len),
+            .name_len = @intCast(name.len),
+        });
+
+        try writer.writeAll(name);
+        try writer.writeByteNTimes(0, pad(usize, name.len) - name.len);
+
+        while (this.reply_data == null) {
+            // TODO: verify locking read + write is OK
+            // TODO: verify if we need to wait for data
+            try this.readMessage();
+        }
+
+        const reply_data = this.reply_data.?;
+        const reply = fromPtr(io.InternAtomReply, reply_data.ptr);
+
+        this.allocator.free(reply_data);
+        this.reply_data = null;
+
+        return reply.atom;
     }
 
     pub fn mapWindow(this: *Server, window_id: u32) !void {
@@ -148,50 +191,60 @@ pub const Server = struct {
     }
 
     pub fn readMessage(this: *Server) !void {
-        var buffer: [32]u8 = undefined;
-        var name: [:0]const u8 = "";
-
         const reader = this.connection.stream.reader();
 
         this.read_mutex.lock();
         defer this.read_mutex.unlock();
 
-        _ = try reader.readAll(buffer[0..]);
+        const info = try reader.readStruct(GenericMessage);
+        const message: ?Message = switch (info.code) {
+            .@"error" => Message{
+                .@"error" = fromPtr(io.Error, &info),
+            },
+            .reply => blk: {
+                const generic = fromPtr(GenericReply, &info);
+                const generic_data = std.mem.asBytes(&generic);
+                const data = try this.allocator.alloc(u8, generic.sizeOf());
+                errdefer this.allocator.free(data);
 
-        if (buffer[0] > 1 and buffer[0] <= 35) {
-            name = @tagName(@as(io.Code, @enumFromInt(buffer[0])));
-        }
+                // write generic to data; copy extended bytes from socket
+                @memcpy(data[0..@sizeOf(GenericReply)], generic_data);
+                _ = try reader.readAll(data[@sizeOf(GenericReply)..]);
+                // data now contains full reply with all related data
 
-        const message: ?Message = switch (buffer[0]) {
-            @intFromEnum(io.Code.@"error") => Message{
-                .@"error" = fromPtr(io.Error, &buffer),
+                if (this.reply_data != null) {
+                    @panic("did not clean up last reply");
+                }
+
+                this.reply_data = data;
+                break :blk null; // null result won't trigger handler
             },
-            @intFromEnum(io.Code.focus_in) => Message{
-                .focus_in = fromPtr(io.FocusInEvent, &buffer),
+            .focus_in => Message{
+                .focus_in = fromPtr(io.FocusInEvent, &info),
             },
-            @intFromEnum(io.Code.focus_out) => Message{
-                .focus_out = fromPtr(io.FocusOutEvent, &buffer),
+            .focus_out => Message{
+                .focus_out = fromPtr(io.FocusOutEvent, &info),
             },
-            @intFromEnum(io.Code.keymap_notify) => Message{
-                .keymap_notify = fromPtr(io.KeymapNotifyEvent, &buffer),
+            .keymap_notify => Message{
+                .keymap_notify = fromPtr(io.KeymapNotifyEvent, &info),
             },
-            @intFromEnum(io.Code.expose) => Message{
-                .expose = fromPtr(io.ExposeEvent, &buffer),
+            .expose => Message{
+                .expose = fromPtr(io.ExposeEvent, &info),
             },
-            @intFromEnum(io.Code.visbility_notify) => Message{
-                .visbility_notify = fromPtr(io.VisibilityNotifyEvent, &buffer),
+            .visibility_notify => Message{
+                .visibility_notify = fromPtr(io.VisibilityNotifyEvent, &info),
             },
-            @intFromEnum(io.Code.map_notify) => Message{
-                .map_notify = fromPtr(io.MapNotifyEvent, &buffer),
+            .map_notify => Message{
+                .map_notify = fromPtr(io.MapNotifyEvent, &info),
             },
-            @intFromEnum(io.Code.reparent_notify) => Message{
-                .reparent_notify = fromPtr(io.ReparentNotifyEvent, &buffer),
+            .reparent_notify => Message{
+                .reparent_notify = fromPtr(io.ReparentNotifyEvent, &info),
             },
-            @intFromEnum(io.Code.property_notify) => Message{
-                .property_notify = fromPtr(io.PropertyNotifyEvent, &buffer),
+            .property_notify => Message{
+                .property_notify = fromPtr(io.PropertyNotifyEvent, &info),
             },
-            @intFromEnum(io.Code.client_message) => Message{
-                .client_message = fromPtr(io.ClientMessageEvent, &buffer),
+            .client_message => Message{
+                .client_message = fromPtr(io.ClientMessageEvent, &info),
             },
             else => null,
         };

@@ -1,6 +1,11 @@
 const std = @import("std");
 const x11 = @import("x11.zig");
 
+var atoms = struct {
+    WM_PROTOCOLS: u32 = x11.none,
+    WM_DELETE_WINDOW: u32 = x11.none,
+}{};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -11,6 +16,11 @@ pub fn main() !void {
     var server = try x11.handshake(allocator, connection);
     defer server.deinit();
     _ = server.attachHandler(handleMessage);
+
+    atoms.WM_PROTOCOLS = try server.internAtom("WM_PROTOCOLS", true);
+    atoms.WM_DELETE_WINDOW = try server.internAtom("WM_DELETE_WINDOW", true);
+
+    std.debug.print("Atoms: {any}\n", .{atoms});
 
     const window_id = try server.createWindow(0, 0, 100, 100);
     _ = try server.mapWindow(window_id);

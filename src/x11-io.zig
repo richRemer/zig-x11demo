@@ -52,7 +52,7 @@ pub const Code = enum(u8) {
     expose,
     graphics_exposure,
     no_exposure,
-    visbility_notify,
+    visibility_notify,
     create_notify,
     destroy_notify,
     unmap_notify,
@@ -72,6 +72,7 @@ pub const Code = enum(u8) {
     colormap_notify,
     client_message,
     mapping_notify,
+    _,
 };
 
 pub const CreateWindowClass = enum(u16) {
@@ -638,7 +639,13 @@ pub const CreateWindowRequest = extern struct {
     visual: u32 = CreateWindowRequest.visual_copy_from_parent,
     value_mask: WindowAttributes,
 
+    /// Default value for .visual.
     pub const visual_copy_from_parent: u32 = 0;
+
+    /// Calculate .request_len for request with given number of flags.
+    pub fn requestLen(num_flags: u8) u16 {
+        return @sizeOf(CreateWindowRequest) / 4 + num_flags;
+    }
 };
 
 pub const InternAtomRequest = extern struct {
@@ -646,7 +653,13 @@ pub const InternAtomRequest = extern struct {
     only_if_exists: bool,
     request_len: u16,
     name_len: u16,
-    unused: u16,
+    unused: u16 = 0,
+
+    /// Calculate .request_len for request with the given name length.
+    pub fn requestLen(name_len: usize) u16 {
+        const pad = name_len + ((4 - (name_len % 4)) % 4);
+        return @intCast((@sizeOf(InternAtomRequest) + pad) / 4);
+    }
 };
 
 pub const MapWindowRequest = extern struct {
@@ -675,7 +688,7 @@ pub const Message = union(Code) {
     expose: ExposeEvent,
     graphics_exposure: GenericEvent,
     no_exposure: GenericEvent,
-    visbility_notify: VisibilityNotifyEvent,
+    visibility_notify: VisibilityNotifyEvent,
     create_notify: GenericEvent,
     destroy_notify: GenericEvent,
     unmap_notify: GenericEvent,
@@ -862,6 +875,12 @@ pub const GenericReply = extern struct {
     data_2: u64,
     data_3: u64,
     data_4: u64,
+
+    /// Return the size of this reply in bytes, including any additional data
+    /// specified by .reply_len (which will not be included by @sizeOf).
+    pub fn sizeOf(this: GenericReply) usize {
+        return this.reply_len * 4 + @sizeOf(GenericReply);
+    }
 };
 
 pub const GetWindowAttributesReply = extern struct {
@@ -1372,7 +1391,7 @@ pub const ExposeEvent = extern struct {
 };
 
 pub const VisibilityNotifyEvent = extern struct {
-    code: Code = .visbility_notify,
+    code: Code = .visibility_notify,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
