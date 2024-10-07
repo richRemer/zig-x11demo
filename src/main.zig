@@ -17,10 +17,7 @@ pub fn main() !void {
     defer server.deinit();
     _ = server.attachHandler(handleMessage);
 
-    atoms.WM_PROTOCOLS = try server.internAtom("WM_PROTOCOLS", true);
-    atoms.WM_DELETE_WINDOW = try server.internAtom("WM_DELETE_WINDOW", true);
-
-    std.debug.print("Atoms: {any}\n", .{atoms});
+    try internAtoms(&server);
 
     const window_id = try server.createWindow(0, 0, 100, 100);
     _ = try server.mapWindow(window_id);
@@ -35,6 +32,12 @@ fn handleMessage(message: x11.Message) void {
         .reply => unreachable,
         .client_message => |evt| std.log.debug("{any}", .{evt}),
         else => {},
+    }
+}
+
+fn internAtoms(server: *x11.Server) !void {
+    inline for (@typeInfo(@TypeOf(atoms)).@"struct".fields) |field| {
+        @field(atoms, field.name) = try server.internAtom(field.name, true);
     }
 }
 

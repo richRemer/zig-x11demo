@@ -109,13 +109,6 @@ pub const Server = struct {
         width: u16,
         height: u16,
     ) !u32 {
-        // TODO: lookup/manage Atoms
-        // TODO: e.g., WM_DELETE_WINDOW is an Atom
-        // TODO: must be set in "WM_PROTOCOLS" (also an Atom)
-        // TODO: q.v., https://stackoverflow.com/questions/10792361/how-do-i-gracefully-exit-an-x11-event-loop
-        // TODO: q.v., XInternAtom
-        // TODO: q.v., XSetWMProtocols
-
         const num_flags = 2;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
@@ -145,11 +138,7 @@ pub const Server = struct {
         return window_id;
     }
 
-    pub fn internAtom(
-        this: *Server,
-        name: []const u8,
-        must_exist: bool,
-    ) !u32 {
+    pub fn internAtom(this: *Server, name: []const u8, must_exist: bool) !u32 {
         const writer = this.connection.stream.writer();
 
         this.write_mutex.lock();
