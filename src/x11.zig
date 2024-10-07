@@ -42,6 +42,34 @@ pub const Server = struct {
     success_data: []u8,
     success: *setup.Success,
 
+    pub const Property = struct {
+        allocator: std.mem.Allocator,
+        buffer: []u8,
+        type_id: u32,
+        format: u8,
+        more: u32,
+
+        pub fn deinit(this: Property) void {
+            this.allocator.free(this.buffer);
+        }
+
+        pub fn valueData(this: Property, comptime T: type) []T {
+            switch (this.format) {
+                0 => @panic("property has no data"),
+                8 => if (T != u8) @panic("property data is u8"),
+                16 => if (T != u16) @panic("property data is u16"),
+                32 => if (T != u32) @panic("property data is u32"),
+                else => @panic("property format is not valid"),
+            }
+
+            const reply = fromPtr(io.GetPropertyReply, this.buffer.ptr);
+            const data = this.buffer[@sizeOf(io.GetPropertyReply)..];
+            const address = @intFromPtr(data.ptr);
+
+            return @as([*]T, @ptrFromInt(address))[0..reply.value_len];
+        }
+    };
+
     pub fn init(
         allocator: std.mem.Allocator,
         connection: Connection,
@@ -96,12 +124,6 @@ pub const Server = struct {
         this.allocator.free(this.success_data);
     }
 
-    pub fn attachHandler(this: *Server, handler: *const fn (Message) void) bool {
-        const removed = this.handler != null;
-        this.handler = handler;
-        return removed;
-    }
-
     pub fn createWindow(
         this: *Server,
         x: i16,
@@ -138,6 +160,50 @@ pub const Server = struct {
         return window_id;
     }
 
+    pub fn getProperty(
+        this: *Server,
+        window_id: u32,
+        property_id: u32,
+    ) !Property {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(io.GetPropertyRequest{
+            .delete = false,
+            .window_id = window_id,
+            .property_id = property_id,
+            .long_offset = 0,
+            .long_length = 1, // TODO: make this an argument
+        });
+
+        while (this.reply_data == null) {
+            try this.readMessage();
+        }
+
+        const reply_data = this.reply_data.?;
+        const buffer = try this.allocator.dupe(u8, reply_data);
+        errdefer this.allocator.free(buffer);
+
+        this.allocator.free(reply_data);
+        this.reply_data = null;
+
+        const reply = fromPtr(io.GetPropertyReply, buffer.ptr);
+        const size = switch (reply.format) {
+            0, 8, 16, 32 => |bits| bits / 8,
+            else => return error.X11ProtocolError,
+        };
+
+        return Property{
+            .allocator = this.allocator,
+            .buffer = buffer,
+            .type_id = reply.type_id,
+            .format = reply.format,
+            .more = if (size == 0) 0 else reply.bytes_after / size,
+        };
+    }
+
     pub fn internAtom(this: *Server, name: []const u8, must_exist: bool) !u32 {
         const writer = this.connection.stream.writer();
 
@@ -154,8 +220,6 @@ pub const Server = struct {
         try writer.writeByteNTimes(0, pad(usize, name.len) - name.len);
 
         while (this.reply_data == null) {
-            // TODO: verify locking read + write is OK
-            // TODO: verify if we need to wait for data
             try this.readMessage();
         }
 

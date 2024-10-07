@@ -15,12 +15,15 @@ pub fn main() !void {
 
     var server = try x11.handshake(allocator, connection);
     defer server.deinit();
-    _ = server.attachHandler(handleMessage);
 
+    server.handler = handleMessage;
     try internAtoms(&server);
 
     const window_id = try server.createWindow(0, 0, 100, 100);
-    _ = try server.mapWindow(window_id);
+    const protocols = try server.getProperty(window_id, atoms.WM_PROTOCOLS);
+    defer protocols.deinit();
+
+    try server.mapWindow(window_id);
 
     const status = eventLoop(&server);
     std.process.exit(status);

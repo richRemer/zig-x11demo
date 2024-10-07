@@ -29,6 +29,12 @@ pub const BitGravity = enum(u8) {
     static,
 };
 
+pub const ChangePropertyMode = enum(u8) {
+    replace,
+    prepend,
+    append,
+};
+
 /// Message code used to distinguish between the different types of data sent
 /// by an X11 server.  Each message starts with a Code.  Messages with a code
 /// of .reply are at least 32 bytes, but may contain additional data.  All
@@ -648,6 +654,19 @@ pub const CreateWindowRequest = extern struct {
     }
 };
 
+pub const GetPropertyRequest = extern struct {
+    opcode: Opcode = .get_property,
+    delete: bool,
+    request_len: u16 = 6,
+    window_id: u32,
+    property_id: u32,
+    type_id: u32 = GetPropertyRequest.type_any,
+    long_offset: u32,
+    long_length: u32,
+
+    pub const type_any: u32 = 0;
+};
+
 pub const InternAtomRequest = extern struct {
     opcode: Opcode = .intern_atom,
     only_if_exists: bool,
@@ -953,7 +972,7 @@ pub const GetPropertyReply = extern struct {
     format: u8,
     sequence_number: u16,
     reply_len: u32,
-    type: u32,
+    type_id: u32,
     bytes_after: u32,
     value_len: u32,
     unused: [12]u8 = [1]u8{0} ** 12,
@@ -1440,6 +1459,15 @@ pub const ClientMessageEvent = extern struct {
     window_id: u32,
     type: u32,
     data: [20]u8,
+
+    pub const Int8 = extern struct {
+        code: Code = .client_message,
+        format: u8 = 8,
+        sequence_number: u16,
+        window_id: u32,
+        type: u32,
+        data: [20]u8,
+    };
 
     pub const Int16 = extern struct {
         code: Code = .client_message,
