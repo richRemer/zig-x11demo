@@ -233,7 +233,75 @@ pub const Server = struct {
         });
     }
 
-    pub fn readMessage(this: *Server) !void {
+    pub fn getNextId(this: *Server) u32 {
+        const mask = this.success.resource_id_mask;
+        const base = this.success.resource_id_base;
+        const id: u32 = (mask & this.global_id) | base;
+
+        this.global_id += 1;
+
+        return id;
+    }
+
+    /// Read all pending messages and return the number of messages read.
+    pub fn readAll(this: *Server) !u32 {
+        var count: u32 = 0;
+        while (try this.readOne()) count += 1;
+        return count;
+    }
+
+    /// Read the next message, if one is available.  Return true if a message
+    /// was not available.
+    pub fn readOne(this: *Server) !bool {
+        return this.readOneWithTimeout(0);
+    }
+
+    /// Read the next message, if one is available, or wait until one becomes
+    /// available.
+    pub fn readOneWait(this: *Server) !void {
+        _ = try this.readOneWithTimeout(-1); // unlimited
+    }
+
+    /// Read the next message, if one is available or becomes available before
+    /// the timeout.  A negative timeout will wait forever.  If a message is
+    /// read, the return value will be true.
+    pub fn readOneWithTimeout(this: *Server, timeout: i32) !bool {
+        const pollfd = std.os.linux.pollfd;
+
+        var pollfds = [1]pollfd{pollfd{
+            .fd = this.connection.stream.handle,
+            .events = std.os.linux.POLL.IN,
+            .revents = 0,
+        }};
+
+        if (std.os.linux.poll(&pollfds, pollfds.len, timeout) == 0) {
+            return false;
+        } else {
+            if (pollfds[0].revents & std.os.linux.POLL.ERR > 0) {
+                log.err("socket poll error", .{});
+                return error.X11SocketError;
+            }
+
+            if (pollfds[0].revents & std.os.linux.POLL.HUP > 0) {
+                log.err("socket poll error", .{});
+                return error.X11SocketError;
+            }
+
+            this.readMessage() catch {
+                log.err("could not read message from socket", .{});
+                return error.X11SocketError;
+            };
+
+            return true;
+        }
+    }
+
+    /// Read the next pending message from the X11 server.  If the message is a
+    /// reply, the .reply_data field will be set.  If it is an error or event
+    /// and a .handler has been setup, the message will be passed to the
+    /// handler.
+    /// TODO: confirm behavior when no data is available
+    fn readMessage(this: *Server) !void {
         const reader = this.connection.stream.reader();
 
         this.read_mutex.lock();
@@ -295,16 +363,6 @@ pub const Server = struct {
         if (message != null and this.handler != null) {
             this.handler.?(message.?);
         }
-    }
-
-    pub fn getNextId(this: *Server) u32 {
-        const mask = this.success.resource_id_mask;
-        const base = this.success.resource_id_base;
-        const id: u32 = (mask & this.global_id) | base;
-
-        this.global_id += 1;
-
-        return id;
     }
 };
 

@@ -24,9 +24,9 @@ pub fn main() !void {
     defer protocols.deinit();
 
     try server.mapWindow(window_id);
+    while (true) try server.readOneWait();
 
-    const status = eventLoop(&server);
-    std.process.exit(status);
+    std.process.exit(0);
 }
 
 fn handleMessage(message: x11.Message) void {
@@ -42,38 +42,4 @@ fn internAtoms(server: *x11.Server) !void {
     inline for (@typeInfo(@TypeOf(atoms)).@"struct".fields) |field| {
         @field(atoms, field.name) = try server.internAtom(field.name, true);
     }
-}
-
-fn eventLoop(server: *x11.Server) u8 {
-    const linux = std.os.linux;
-    const fd_count = 1;
-    const unlimited_timeout: i32 = -1;
-
-    var running = true;
-    var pollfds: [1]linux.pollfd = undefined;
-
-    pollfds[0] = linux.pollfd{
-        .fd = server.connection.stream.handle,
-        .events = linux.POLL.IN,
-        .revents = 0,
-    };
-
-    while (running) {
-        _ = linux.poll(&pollfds, fd_count, unlimited_timeout);
-
-        if (pollfds[0].revents & linux.POLL.ERR == linux.POLL.ERR) {
-            x11.log.err("poll error", .{});
-        }
-
-        if (pollfds[0].revents & linux.POLL.HUP == linux.POLL.HUP) {
-            x11.log.debug("connection closed", .{});
-            running = false;
-        }
-
-        server.readMessage() catch {
-            x11.log.err("could not read message from X11 server", .{});
-        };
-    }
-
-    return 0;
 }
