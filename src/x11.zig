@@ -496,28 +496,6 @@ pub fn handshake(
     }
 }
 
-pub fn verify_atoms(comptime atoms: anytype) void {
-    const name_buffer: [32]u8 = [1]u8{0} ** 32;
-    const Atoms = @TypeOf(atoms);
-    const atoms_info = @typeInfo(Atoms);
-
-    if (atoms_info != .@"struct" or !atoms_info.@"struct".is_tuple) {
-        @compileError("expected tuple argument, found " ++ @typeName(Atoms));
-    }
-
-    inline for (atoms_info.@"struct".fields) |field| {
-        if (field.type != @Type(.enum_literal)) {
-            @compileError("'" ++ field.name ++ "' is not an enum literal");
-        } else if (field.name.len > name_buffer.len) {
-            @compileError("atom name '" ++ field.name ++ "' is too long");
-        }
-    }
-
-    // inline for (atoms_info.@"struct".fields) |field| {
-    //     _ = std.ascii.upperString(name, field.name);
-    // }
-}
-
 pub const Protocol = enum(u8) {
     unknown,
     unix,
