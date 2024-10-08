@@ -29,6 +29,10 @@ pub const BitGravity = enum(u8) {
     static,
 };
 
+/// How existing property values should be merged with new ones when sending a
+/// ChangePropertyRequest.  Use .replace to overwrite existing values with new
+/// ones.  Use .prepend or .append to add new values before or after existing
+/// values, respectively.
 pub const ChangePropertyMode = enum(u8) {
     replace,
     prepend,
@@ -81,12 +85,19 @@ pub const Code = enum(u8) {
     _,
 };
 
+/// The types of events a newly created window is expected to handle.  Windows
+/// that are .input_only cannot be shown, but may capture keyboard and other
+/// input events.  Windows that are .input_output can also be shown.  If a new
+/// window is a subwindow of another, .copy_from_parent can be used to inherit
+/// the behavior of the superwindow.
 pub const CreateWindowClass = enum(u16) {
     copy_from_parent,
     input_output,
     input_only,
 };
 
+/// The direction text flows for font.  This value is returned by a variety of
+/// font-related requests.
 pub const DrawDirection = enum(u8) {
     left_to_right,
     right_to_left,
@@ -163,6 +174,9 @@ pub const ModifierMappingStatus = enum(u8) {
     failed,
 };
 
+/// The code used to identify a message's type.  Each code corresponds to a
+/// well-defined request struct.  For example, Opcode.destroy_window is the
+/// message code set for a DetroyWindowRequest message.
 pub const Opcode = enum(u8) {
     create_window = 1,
     change_window_attributes,
@@ -321,6 +335,9 @@ pub const VisualClass = enum(u8) {
     direct_color,
 };
 
+/// The types of events a window handles.  Windows that are .input_only cannot
+/// be shown, but may capture keyboard and other input events.  Windows that
+/// are .input_output can also be shown.
 pub const WindowClass = enum(u16) {
     input_output = 1,
     input_only,
@@ -375,6 +392,7 @@ pub const RGB = extern struct {
     unused: u16,
 };
 
+/// Information about X11 screen sent by the initial connection handshake.
 pub const Screen = extern struct {
     root: u32,
     default_colormap: u32,
@@ -630,96 +648,6 @@ pub const WindowAttributes = packed struct(u32) {
     };
 };
 
-pub const ChangePropertyRequest = extern struct {
-    opcode: Opcode = .change_property,
-    mode: ChangePropertyMode,
-    request_len: u16,
-    window_id: u32,
-    property_id: u32,
-    type_id: u32,
-    format: u8,
-    unused: [3]u8 = [1]u8{0} ** 3,
-    data_len: u32,
-
-    /// Calculate .request_len for request with given format and data length.
-    pub fn requestLen(format: u8, data_len: u32) u16 {
-        const datum_size = switch (format) {
-            8, 16, 32 => |bits| bits / 8,
-            else => @panic("format must be 8, 16, or 32 bits"),
-        };
-
-        const data_size = data_len * datum_size;
-        const padded_size = data_size + ((4 - (data_size % 4)) % 4);
-
-        return @intCast(@sizeOf(ChangePropertyRequest) + padded_size);
-    }
-};
-
-pub const CreateWindowRequest = extern struct {
-    opcode: Opcode = .create_window,
-    depth: u8,
-    request_len: u16,
-    window_id: u32,
-    parent_id: u32,
-    x: i16 = 50,
-    y: i16 = 50,
-    width: u16 = 200,
-    height: u16 = 300,
-    border_width: u16 = 0,
-    class: CreateWindowClass = .copy_from_parent,
-    visual: u32 = CreateWindowRequest.visual_copy_from_parent,
-    value_mask: WindowAttributes,
-
-    /// Default value for .visual.
-    pub const visual_copy_from_parent: u32 = 0;
-
-    /// Calculate .request_len for request with given number of flags.
-    pub fn requestLen(num_flags: u8) u16 {
-        return @sizeOf(CreateWindowRequest) / 4 + num_flags;
-    }
-};
-
-pub const DestroyWindowRequest = extern struct {
-    opcode: Opcode = .destroy_window,
-    unused: u8 = 0,
-    request_len: u16 = 2,
-    window_id: u32,
-};
-
-pub const GetPropertyRequest = extern struct {
-    opcode: Opcode = .get_property,
-    delete: bool,
-    request_len: u16 = 6,
-    window_id: u32,
-    property_id: u32,
-    type_id: u32 = GetPropertyRequest.type_any,
-    long_offset: u32,
-    long_length: u32,
-
-    pub const type_any: u32 = 0;
-};
-
-pub const InternAtomRequest = extern struct {
-    opcode: Opcode = .intern_atom,
-    only_if_exists: bool,
-    request_len: u16,
-    name_len: u16,
-    unused: u16 = 0,
-
-    /// Calculate .request_len for request with the given name length.
-    pub fn requestLen(name_len: usize) u16 {
-        const pad = name_len + ((4 - (name_len % 4)) % 4);
-        return @intCast((@sizeOf(InternAtomRequest) + pad) / 4);
-    }
-};
-
-pub const MapWindowRequest = extern struct {
-    opcode: Opcode = .map_window,
-    unused: u8 = 0,
-    request_len: u16 = 2,
-    window_id: u32,
-};
-
 /// Union of the three basic X11 message types: Error, Reply, and Event.
 /// Error and Event messages are simple 32-byte structs. Reply messages are
 /// each different structures and may contain additional data.
@@ -933,6 +861,119 @@ pub const GenericReply = extern struct {
         return this.reply_len * 4 + @sizeOf(GenericReply);
     }
 };
+
+/// Generic Event structure that can be used when reading messages from an X11
+/// server.  Should only be used internally before being cast to a more
+/// suitable type.
+pub const GenericEvent = extern struct {
+    code: Code,
+    data_1: u8,
+    /// This maps to sequence_number for MOST events, but KeymapNotifyEvent is
+    /// the odd man out.
+    data_2: u16,
+    data_3: u32,
+    data_4: u64,
+    data_5: u64,
+    data_6: u64,
+};
+
+// **************************************************************************
+// * X11 requests                                                           *
+// **************************************************************************
+
+pub const ChangePropertyRequest = extern struct {
+    opcode: Opcode = .change_property,
+    mode: ChangePropertyMode,
+    request_len: u16,
+    window_id: u32,
+    property_id: u32,
+    type_id: u32,
+    format: u8,
+    unused: [3]u8 = [1]u8{0} ** 3,
+    data_len: u32,
+
+    /// Calculate .request_len for request with given format and data length.
+    pub fn requestLen(format: u8, data_len: u32) u16 {
+        const datum_size = switch (format) {
+            8, 16, 32 => |bits| bits / 8,
+            else => @panic("format must be 8, 16, or 32 bits"),
+        };
+
+        const data_size = data_len * datum_size;
+        const padded_size = data_size + ((4 - (data_size % 4)) % 4);
+
+        return @intCast(@sizeOf(ChangePropertyRequest) + padded_size);
+    }
+};
+
+pub const CreateWindowRequest = extern struct {
+    opcode: Opcode = .create_window,
+    depth: u8,
+    request_len: u16,
+    window_id: u32,
+    parent_id: u32,
+    x: i16 = 50,
+    y: i16 = 50,
+    width: u16 = 200,
+    height: u16 = 300,
+    border_width: u16 = 0,
+    class: CreateWindowClass = .copy_from_parent,
+    visual: u32 = CreateWindowRequest.visual_copy_from_parent,
+    value_mask: WindowAttributes,
+
+    /// Default value for .visual.
+    pub const visual_copy_from_parent: u32 = 0;
+
+    /// Calculate .request_len for request with given number of flags.
+    pub fn requestLen(num_flags: u8) u16 {
+        return @sizeOf(CreateWindowRequest) / 4 + num_flags;
+    }
+};
+
+pub const DestroyWindowRequest = extern struct {
+    opcode: Opcode = .destroy_window,
+    unused: u8 = 0,
+    request_len: u16 = 2,
+    window_id: u32,
+};
+
+pub const GetPropertyRequest = extern struct {
+    opcode: Opcode = .get_property,
+    delete: bool,
+    request_len: u16 = 6,
+    window_id: u32,
+    property_id: u32,
+    type_id: u32 = GetPropertyRequest.type_any,
+    long_offset: u32,
+    long_length: u32,
+
+    pub const type_any: u32 = 0;
+};
+
+pub const InternAtomRequest = extern struct {
+    opcode: Opcode = .intern_atom,
+    only_if_exists: bool,
+    request_len: u16,
+    name_len: u16,
+    unused: u16 = 0,
+
+    /// Calculate .request_len for request with the given name length.
+    pub fn requestLen(name_len: usize) u16 {
+        const pad = name_len + ((4 - (name_len % 4)) % 4);
+        return @intCast((@sizeOf(InternAtomRequest) + pad) / 4);
+    }
+};
+
+pub const MapWindowRequest = extern struct {
+    opcode: Opcode = .map_window,
+    unused: u8 = 0,
+    request_len: u16 = 2,
+    window_id: u32,
+};
+
+// **************************************************************************
+// * X11 replies                                                            *
+// **************************************************************************
 
 pub const GetWindowAttributesReply = extern struct {
     code: Code = .reply,
@@ -1390,20 +1431,9 @@ pub const GetModifierMappingReply = extern struct {
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
-/// Generic Event structure that can be used when reading messages from an X11
-/// server.  Should only be used internally before being cast to a more
-/// suitable type.
-pub const GenericEvent = extern struct {
-    code: Code,
-    data_1: u8,
-    /// This maps to sequence_number for MOST events, but KeymapNotifyEvent is
-    /// the odd man out.
-    data_2: u16,
-    data_3: u32,
-    data_4: u64,
-    data_5: u64,
-    data_6: u64,
-};
+// **************************************************************************
+// * X11 events                                                             *
+// **************************************************************************
 
 pub const FocusInEvent = extern struct {
     code: Code = .focus_in,
