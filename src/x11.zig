@@ -27,7 +27,8 @@ const Connection = struct {
 pub const Server = struct {
     allocator: std.mem.Allocator,
     connection: Connection,
-    handler: ?*const fn (Message) void = null,
+    // TODO: add context parameter
+    handler: ?*const fn (*Server, Message) void = null,
     global_id: u32 = 0,
     root_window_id: u32,
     root_visual_id: u32,
@@ -124,6 +125,33 @@ pub const Server = struct {
         this.allocator.free(this.success_data);
     }
 
+    pub fn changeProperty(
+        this: *Server,
+        window_id: u32,
+        property_id: u32,
+        value: u32,
+    ) !void {
+        const format = 32; // TODO: make format configurable
+        const data_len = 1; // TODO: support multiple values
+        const mode = io.ChangePropertyMode.replace; // TOOD: support all modes
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(io.ChangePropertyRequest{
+            .mode = mode,
+            .request_len = io.ChangePropertyRequest.requestLen(format, data_len),
+            .window_id = window_id,
+            .property_id = property_id,
+            .type_id = none, // ignored? (docs say "uninterpreted")
+            .format = format,
+            .data_len = data_len,
+        });
+
+        try writer.writeInt(u32, value, arch.endian());
+    }
+
     pub fn createWindow(this: *Server) !u32 {
         const num_flags = 2;
         const window_id = this.getNextId();
@@ -148,6 +176,17 @@ pub const Server = struct {
         try writer.writeStruct(io.EventSet.all);
 
         return window_id;
+    }
+
+    pub fn destroyWindow(this: *Server, window_id: u32) !void {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(io.DestroyWindowRequest{
+            .window_id = window_id,
+        });
     }
 
     pub fn getProperty(
@@ -308,7 +347,8 @@ pub const Server = struct {
         defer this.read_mutex.unlock();
 
         const info = try reader.readStruct(GenericMessage);
-        const message: ?Message = switch (info.code) {
+        const code: io.Code = @enumFromInt(@intFromEnum(info.code) & 0x7f);
+        const message: ?Message = switch (code) {
             .@"error" => Message{
                 .@"error" = fromPtr(io.Error, &info),
             },
@@ -361,7 +401,7 @@ pub const Server = struct {
         };
 
         if (message != null and this.handler != null) {
-            this.handler.?(message.?);
+            this.handler.?(this, message.?);
         }
     }
 };

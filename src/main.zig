@@ -29,11 +29,19 @@ pub fn main() !void {
     std.process.exit(0);
 }
 
-fn handleMessage(message: x11.Message) void {
+fn handleMessage(server: *x11.Server, message: x11.Message) void {
     switch (message) {
         .@"error" => |err| std.log.err("{any}", .{err}),
         .reply => unreachable,
-        .client_message => |evt| std.log.debug("{any}", .{evt}),
+        .client_message => |evt| {
+            if (evt.type == atoms.WM_PROTOCOLS) {
+                const datum = @as(*u32, @ptrFromInt(@intFromPtr(&evt.data))).*;
+
+                if (datum == atoms.WM_DELETE_WINDOW) {
+                    server.destroyWindow(evt.window_id) catch unreachable;
+                }
+            }
+        },
         else => {},
     }
 }

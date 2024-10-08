@@ -630,6 +630,31 @@ pub const WindowAttributes = packed struct(u32) {
     };
 };
 
+pub const ChangePropertyRequest = extern struct {
+    opcode: Opcode = .change_property,
+    mode: ChangePropertyMode,
+    request_len: u16,
+    window_id: u32,
+    property_id: u32,
+    type_id: u32,
+    format: u8,
+    unused: [3]u8 = [1]u8{0} ** 3,
+    data_len: u32,
+
+    /// Calculate .request_len for request with given format and data length.
+    pub fn requestLen(format: u8, data_len: u32) u16 {
+        const datum_size = switch (format) {
+            8, 16, 32 => |bits| bits / 8,
+            else => @panic("format must be 8, 16, or 32 bits"),
+        };
+
+        const data_size = data_len * datum_size;
+        const padded_size = data_size + ((4 - (data_size % 4)) % 4);
+
+        return @intCast(@sizeOf(ChangePropertyRequest) + padded_size);
+    }
+};
+
 pub const CreateWindowRequest = extern struct {
     opcode: Opcode = .create_window,
     depth: u8,
@@ -652,6 +677,13 @@ pub const CreateWindowRequest = extern struct {
     pub fn requestLen(num_flags: u8) u16 {
         return @sizeOf(CreateWindowRequest) / 4 + num_flags;
     }
+};
+
+pub const DestroyWindowRequest = extern struct {
+    opcode: Opcode = .destroy_window,
+    unused: u8 = 0,
+    request_len: u16 = 2,
+    window_id: u32,
 };
 
 pub const GetPropertyRequest = extern struct {
