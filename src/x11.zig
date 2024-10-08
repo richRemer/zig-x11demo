@@ -1,11 +1,8 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
 const io = @import("x11-io.zig");
-const util = @import("x11-util.zig");
 const arch = @import("builtin").cpu.arch;
 const assert = std.debug.assert;
-const fromPtr = util.fromPtr;
-const pad = util.pad;
 
 pub const log = std.log.scoped(.x11);
 pub const Message = io.Message;
@@ -88,17 +85,17 @@ pub const Server = struct {
         const formats_ptr: [*]io.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
-        const screen = util.first_success_screen(success) orelse {
+        const screen = first_success_screen(success) orelse {
             log.err("success has no screens", .{});
             return error.X11ProtocolError;
         };
 
-        const depth = util.first_screen_depth(screen) orelse {
+        const depth = first_screen_depth(screen) orelse {
             log.err("screen has no depths", .{});
             return error.X11ProtocolError;
         };
 
-        const visual = util.first_depth_visual(depth) orelse {
+        const visual = first_depth_visual(depth) orelse {
             log.err("depth has no visuals", .{});
             return error.X11ProtocolError;
         };
@@ -514,3 +511,49 @@ pub const Protocol = enum(u8) {
         };
     }
 };
+
+// **************************************************************************
+// * Helper functions                                                       *
+// **************************************************************************
+
+// TOOD: make this a static method of some type
+inline fn first_success_screen(success: *setup.Success) ?*io.Screen {
+    if (success.num_screens > 0) {
+        var address = @intFromPtr(success);
+
+        address += @sizeOf(setup.Success);
+        address += pad(u16, success.vendor_len);
+        address += success.num_formats * @sizeOf(io.PixelFormat);
+
+        return @ptrFromInt(address);
+    } else {
+        return null;
+    }
+}
+
+// TOOD: make this a static method of some type
+inline fn first_screen_depth(screen: *io.Screen) ?*io.Depth {
+    if (screen.num_depths > 0) {
+        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(io.Screen));
+    } else {
+        return null;
+    }
+}
+
+// TOOD: make this a static method of some type
+inline fn first_depth_visual(depth: *io.Depth) ?*io.Visual {
+    if (depth.num_visuals > 0) {
+        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(io.Depth));
+    } else {
+        return null;
+    }
+}
+
+inline fn pad(comptime T: type, len: T) T {
+    return len + ((4 - (len % 4)) % 4);
+}
+
+fn fromPtr(comptime T: type, ptr: anytype) T {
+    const address = @intFromPtr(ptr);
+    return @as(*T, @ptrFromInt(address)).*;
+}
