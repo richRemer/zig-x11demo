@@ -19,7 +19,7 @@ pub fn main() !void {
     server.handler = handleMessage;
     try internAtoms(&server);
 
-    const window_id = try server.createWindow(0, 0, 100, 100);
+    const window_id = try server.createWindow();
     const protocols = try server.getProperty(window_id, atoms.WM_PROTOCOLS);
     defer protocols.deinit();
 

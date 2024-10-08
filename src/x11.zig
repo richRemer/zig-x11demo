@@ -124,13 +124,7 @@ pub const Server = struct {
         this.allocator.free(this.success_data);
     }
 
-    pub fn createWindow(
-        this: *Server,
-        x: i16,
-        y: i16,
-        width: u16,
-        height: u16,
-    ) !u32 {
+    pub fn createWindow(this: *Server) !u32 {
         const num_flags = 2;
         const window_id = this.getNextId();
         const writer = this.connection.stream.writer();
@@ -143,10 +137,6 @@ pub const Server = struct {
             .request_len = io.CreateWindowRequest.requestLen(num_flags),
             .window_id = window_id,
             .parent_id = this.root_window_id,
-            .x = x,
-            .y = y,
-            .width = width,
-            .height = height,
             .class = io.CreateWindowClass.input_output,
             .value_mask = .{
                 .background_pixel = true,
