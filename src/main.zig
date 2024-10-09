@@ -3,8 +3,12 @@ const x11 = @import("x11.zig");
 const TagPayload = std.meta.TagPayload;
 
 var atoms = struct {
-    WM_PROTOCOLS: u32 = x11.none,
     WM_DELETE_WINDOW: u32 = x11.none,
+    WM_PROTOCOLS: u32 = x11.none,
+    WM_STATE: u32 = x11.none,
+    _NET_FRAME_EXTENTS: u32 = x11.none,
+    _NET_WM_NAME: u32 = x11.none,
+    _NET_WM_STATE: u32 = x11.none,
 }{};
 
 const AppContext = struct {

@@ -937,6 +937,13 @@ pub const DestroyWindowRequest = extern struct {
     window_id: u32,
 };
 
+pub const GetAtomNameRequest = extern struct {
+    opcode: Opcode = .get_atom_name,
+    unused: u8 = 0,
+    request_len: u16 = 2,
+    atom_id: u32,
+};
+
 pub const GetPropertyRequest = extern struct {
     opcode: Opcode = .get_property,
     delete: bool,

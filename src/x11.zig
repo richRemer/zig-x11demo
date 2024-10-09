@@ -41,6 +41,17 @@ pub const Server = struct {
     success_data: []u8,
     success: *setup.Success,
 
+    pub const Atom = struct {
+        allocator: std.mem.Allocator,
+        buffer: []u8,
+        name: []u8,
+        atom_id: u32,
+
+        pub fn deinit(this: Atom) void {
+            this.allocator.free(this.buffer);
+        }
+    };
+
     pub const Property = struct {
         allocator: std.mem.Allocator,
         buffer: []u8,
@@ -125,14 +136,22 @@ pub const Server = struct {
 
     pub fn changeProperty(
         this: *Server,
+        comptime T: type,
         window_id: u32,
         property_id: u32,
-        value: u32,
+        value: []const T,
     ) !void {
-        const format = 32; // TODO: make format configurable
-        const data_len = 1; // TODO: support multiple values
+        if (T != u8 and T != u16 and T != u32) {
+            @compileError("type must be u8, u16, or u32");
+        }
+
+        const format = @sizeOf(T) * 8;
+        const data_len: u32 = @intCast(value.len);
         const mode = io.ChangePropertyMode.replace; // TOOD: support all modes
         const writer = this.connection.stream.writer();
+        const data_size = data_len * @sizeOf(T);
+        const data = @as([*]const u8, @ptrCast(value.ptr))[0..data_size];
+        const padded = pad(usize, data.len);
 
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
@@ -147,7 +166,8 @@ pub const Server = struct {
             .data_len = data_len,
         });
 
-        try writer.writeInt(u32, value, arch.endian());
+        try writer.writeAll(data);
+        try writer.writeByteNTimes(0, padded - data.len);
     }
 
     pub fn createWindow(this: *Server) !u32 {
@@ -185,6 +205,38 @@ pub const Server = struct {
         try writer.writeStruct(io.DestroyWindowRequest{
             .window_id = window_id,
         });
+    }
+
+    pub fn getAtomName(this: *Server, atom_id: u32) !Atom {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(io.GetAtomNameRequest{
+            .atom_id = atom_id,
+        });
+
+        while (this.reply_data == null) {
+            try this.readMessage();
+        }
+
+        const reply_data = this.reply_data.?;
+        const buffer = try this.allocator.dupe(u8, reply_data);
+        errdefer this.allocator.free(buffer);
+
+        this.allocator.free(reply_data);
+        this.reply_data = null;
+
+        const reply = fromPtr(io.GetAtomNameReply, buffer.ptr);
+        const name = buffer[@sizeOf(io.GetAtomNameReply)..][0..reply.name_len];
+
+        return Atom{
+            .allocator = this.allocator,
+            .buffer = buffer,
+            .name = name,
+            .atom_id = atom_id,
+        };
     }
 
     pub fn getProperty(
@@ -323,10 +375,11 @@ pub const Server = struct {
     /// read, the return value will be true.
     pub fn readOneWithTimeout(this: *Server, timeout: i32) !bool {
         const pollfd = std.os.linux.pollfd;
+        const POLL = std.os.linux.POLL;
 
         var pollfds = [1]pollfd{pollfd{
             .fd = this.connection.stream.handle,
-            .events = std.os.linux.POLL.IN,
+            .events = POLL.IN | POLL.ERR | POLL.HUP,
             .revents = 0,
         }};
 
