@@ -1,10 +1,16 @@
 const std = @import("std");
 const x11 = @import("x11.zig");
+const TagPayload = std.meta.TagPayload;
 
 var atoms = struct {
     WM_PROTOCOLS: u32 = x11.none,
     WM_DELETE_WINDOW: u32 = x11.none,
 }{};
+
+const AppContext = struct {
+    server: *x11.Server,
+    running: bool = true,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -16,7 +22,8 @@ pub fn main() !void {
     var server = try x11.handshake(allocator, connection);
     defer server.deinit();
 
-    server.handler = handleMessage;
+    var context = AppContext{ .server = &server };
+    server.registerHandler(handleMessage, @ptrCast(&context));
     try internAtoms(&server);
 
     const window_id = try server.createWindow();
@@ -24,26 +31,51 @@ pub fn main() !void {
     defer protocols.deinit();
 
     try server.mapWindow(window_id);
-    while (true) try server.readOneWait();
+    while (context.running) try server.readOneWait();
 
     std.process.exit(0);
 }
 
-fn handleMessage(server: *x11.Server, message: x11.Message) void {
-    switch (message) {
-        .@"error" => |err| std.log.err("{any}", .{err}),
-        .reply => unreachable,
-        .client_message => |evt| {
-            if (evt.type == atoms.WM_PROTOCOLS) {
-                const datum = @as(*u32, @ptrFromInt(@intFromPtr(&evt.data))).*;
+fn handleMessage(message: x11.Message, context: ?*anyopaque) void {
+    const ctx = @as(*AppContext, @ptrCast(@alignCast(context.?)));
 
-                if (datum == atoms.WM_DELETE_WINDOW) {
-                    server.destroyWindow(evt.window_id) catch unreachable;
-                }
-            }
-        },
+    switch (message) {
+        .@"error" => |err| std.log.err("server sent: {any}", .{err}),
+        .reply => unreachable,
+        .client_message => |evt| handleClientMessage(evt, ctx),
         else => {},
     }
+}
+
+fn handleClientMessage(
+    evt: TagPayload(x11.Message, .client_message),
+    context: *AppContext,
+) void {
+    if (evt.type == atoms.WM_PROTOCOLS) handleWMProtocols(evt, context);
+}
+
+fn handleWMProtocols(
+    evt: TagPayload(x11.Message, .client_message),
+    context: *AppContext,
+) void {
+    const datum = @as(*u32, @ptrFromInt(@intFromPtr(&evt.data))).*;
+    if (datum == atoms.WM_DELETE_WINDOW) handleDeleteWindow(evt, context);
+}
+
+fn handleDeleteWindow(
+    evt: TagPayload(x11.Message, .client_message),
+    context: *AppContext,
+) void {
+    context.server.destroyWindow(evt.window_id) catch |err| {
+        std.log.err("could not destroy window {d}: {any}", .{
+            evt.window_id,
+            err,
+        });
+
+        return;
+    };
+
+    context.running = false;
 }
 
 fn internAtoms(server: *x11.Server) !void {

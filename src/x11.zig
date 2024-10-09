@@ -25,7 +25,8 @@ pub const Server = struct {
     allocator: std.mem.Allocator,
     connection: Connection,
     // TODO: add context parameter
-    handler: ?*const fn (*Server, Message) void = null,
+    handler: ?*const fn (Message, ?*anyopaque) void = null,
+    handler_context: ?*anyopaque = null,
     global_id: u32 = 0,
     root_window_id: u32,
     root_visual_id: u32,
@@ -269,6 +270,25 @@ pub const Server = struct {
         });
     }
 
+    /// Register a handler to be called when the server sends an error or an
+    /// event.  If a context is provided, the context will also be passed to
+    /// the handler.
+    pub fn registerHandler(
+        this: *Server,
+        handler: fn (Message, ?*anyopaque) void,
+        context: ?*anyopaque,
+    ) void {
+        if (this.handler == null) {
+            this.handler = handler;
+            this.handler_context = context;
+        } else {
+            @panic("only one handler can be registered");
+        }
+    }
+
+    /// Produce a unique (within reason) ID that can be used to initialize a
+    /// resource, such as a Window.
+    /// TODO: deal with wrapping in some way
     pub fn getNextId(this: *Server) u32 {
         const mask = this.success.resource_id_mask;
         const base = this.success.resource_id_base;
@@ -334,7 +354,7 @@ pub const Server = struct {
 
     /// Read the next pending message from the X11 server.  If the message is a
     /// reply, the .reply_data field will be set.  If it is an error or event
-    /// and a .handler has been setup, the message will be passed to the
+    /// and a handler has been registered, the message will be passed to the
     /// handler.
     /// TODO: confirm behavior when no data is available
     fn readMessage(this: *Server) !void {
@@ -398,7 +418,7 @@ pub const Server = struct {
         };
 
         if (message != null and this.handler != null) {
-            this.handler.?(this, message.?);
+            this.handler.?(message.?, this.handler_context);
         }
     }
 };
