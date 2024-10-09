@@ -3,8 +3,12 @@ const x11 = @import("x11.zig");
 const TagPayload = std.meta.TagPayload;
 
 var atoms = struct {
-    WM_PROTOCOLS: u32 = x11.none,
     WM_DELETE_WINDOW: u32 = x11.none,
+    WM_PROTOCOLS: u32 = x11.none,
+    WM_STATE: u32 = x11.none,
+    _NET_FRAME_EXTENTS: u32 = x11.none,
+    _NET_WM_NAME: u32 = x11.none,
+    _NET_WM_STATE: u32 = x11.none,
 }{};
 
 const AppContext = struct {
@@ -30,6 +34,7 @@ pub fn main() !void {
     const protocols = try server.getProperty(window_id, atoms.WM_PROTOCOLS);
     defer protocols.deinit();
 
+    //try server.changeProperty(u8, window_id, atoms._NET_WM_NAME, "X11 demo");
     try server.mapWindow(window_id);
     while (context.running) try server.readOneWait();
 
@@ -42,6 +47,7 @@ fn handleMessage(message: x11.Message, context: ?*anyopaque) void {
     switch (message) {
         .@"error" => |err| std.log.err("server sent: {any}", .{err}),
         .reply => unreachable,
+        .property_notify => |evt| std.log.debug("{any}", .{evt}),
         .client_message => |evt| handleClientMessage(evt, ctx),
         else => {},
     }

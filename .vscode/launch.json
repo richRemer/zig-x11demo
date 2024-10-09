@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug",
+            "preLaunchTask": "Build",
+            "program": "${workspaceFolder}/zig-out/bin/x11demo",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
