@@ -4,6 +4,7 @@ const io = @import("x11-io.zig");
 const arch = @import("builtin").cpu.arch;
 const assert = std.debug.assert;
 
+pub const protocol = @import("x11/protocol.zig");
 pub const log = std.log.scoped(.x11);
 pub const Message = io.Message;
 
@@ -15,7 +16,7 @@ const GenericReply = io.GenericReply;
 pub const none: u32 = 0;
 
 const Connection = struct {
-    protocol: Protocol,
+    scheme: Protocol,
     stream: std.net.Stream,
     display: u8,
     screen: u8,
@@ -183,7 +184,7 @@ pub const Server = struct {
             .request_len = io.CreateWindowRequest.requestLen(num_flags),
             .window_id = window_id,
             .parent_id = this.root_window_id,
-            .class = io.CreateWindowClass.input_output,
+            .class = protocol.CreateWindowClass.input_output,
             .value_mask = .{
                 .background_pixel = true,
                 .event_mask = true,
@@ -417,7 +418,7 @@ pub const Server = struct {
         defer this.read_mutex.unlock();
 
         const info = try reader.readStruct(GenericMessage);
-        const code: io.Code = @enumFromInt(@intFromEnum(info.code) & 0x7f);
+        const code: protocol.Code = @enumFromInt(@intFromEnum(info.code) & 0x7f);
         const message: ?Message = switch (code) {
             .@"error" => Message{
                 .@"error" = fromPtr(io.Error, &info),
@@ -477,12 +478,12 @@ pub const Server = struct {
 };
 
 pub fn connect(
-    protocol: Protocol,
+    scheme: Protocol,
     name: []const u8,
     display: u8,
     screen: u8,
 ) !Connection {
-    return switch (protocol) {
+    return switch (scheme) {
         .unix => connectUnix(name, display, screen),
         .tcp, .inet, .inet6 => connectTCP(name, display, screen),
         else => return error.X11UnknownProtocol,
@@ -494,7 +495,7 @@ pub fn connectUnix(path: []const u8, display: u8, screen: u8) !Connection {
     const sock = try std.fmt.bufPrintZ(&buffer, "{s}{d}", .{ path, display });
 
     return .{
-        .protocol = .unix,
+        .scheme = .unix,
         .stream = try std.net.connectUnixSocket(sock),
         .display = display,
         .screen = screen,
@@ -576,8 +577,8 @@ pub const Protocol = enum(u8) {
     pub const version: u16 = 11;
     pub const revision: u16 = 0;
 
-    pub fn getDelimiter(protocol: Protocol) u8 {
-        return switch (protocol) {
+    pub fn getDelimiter(scheme: Protocol) u8 {
+        return switch (scheme) {
             .unknown => 0,
             .unix => ':',
             .tcp, .inet, .inet6 => '/',

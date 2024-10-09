@@ -1,408 +1,4 @@
-/// Global keyboard auto-repeat mode.  When .on, multiple key press and key
-/// release events will be generated while a key is held down.
-pub const AutoRepeat = enum(u8) {
-    off,
-    on,
-};
-
-/// Backing store mode requested when sending a CreateWindow request.  A mode
-/// of .not_useful tells the server this window will not benefit from backing
-/// store.  A mode of .when_mapped tells the server the window would benefit
-/// from having a backing store for obscured regions when mapped, while a mode
-/// of .always indicates the window would benefit from preserving the backing
-/// store even when the window is unmapped.
-pub const BackingStore = enum(u8) {
-    not_useful,
-    when_mapped,
-    always,
-};
-
-/// Support for backing stores declared by X11 server for a screen specified
-/// during handshake.
-pub const BackingStores = enum(u8) {
-    never,
-    when_mapped,
-    always,
-};
-
-/// Indicates which region of a window should be retained when the window is
-/// resized.
-pub const BitGravity = enum(u8) {
-    forget,
-    north_west,
-    north,
-    north_east,
-    west,
-    center,
-    east,
-    south_west,
-    south,
-    south_east,
-    static,
-};
-
-/// Keyboard auto-repeat mode requested when sending a ChangeKeyboardControl
-/// request.  When .on, multiple key press and key release events will be
-/// generated while a key is held down.  The .default is determined by the
-/// specific key being held down.
-pub const ChangeAutoRepeat = enum(u8) {
-    off,
-    on,
-    default,
-};
-
-/// How existing property values should be merged with new ones when sending a
-/// ChangePropertyRequest.  Use .replace to overwrite existing values with new
-/// ones.  Use .prepend or .append to add new values before or after existing
-/// values, respectively.
-pub const ChangePropertyMode = enum(u8) {
-    replace,
-    prepend,
-    append,
-};
-
-/// Message code used to distinguish between the different types of data sent
-/// by an X11 server.  Each message starts with a Code.  Messages with a code
-/// of .reply are at least 32 bytes, but may contain additional data.  All
-/// other Message types are exactly 32 bytes.
-pub const Code = enum(u8) {
-    // XMessageError, 32 bytes
-    @"error" = 0,
-    // generic reply, 32 bytes + additional data
-    reply = 1,
-    // events, 32 bytes each
-    key_press = 2,
-    key_release,
-    button_press,
-    button_release,
-    motion_notify,
-    enter_notify,
-    leave_notify,
-    focus_in,
-    focus_out,
-    keymap_notify,
-    expose,
-    graphics_exposure,
-    no_exposure,
-    visibility_notify,
-    create_notify,
-    destroy_notify,
-    unmap_notify,
-    map_notify,
-    map_request,
-    reparent_notify,
-    configure_notify,
-    configure_request,
-    gravity_notify,
-    resize_request,
-    circulate_notify,
-    circulate_request,
-    property_notify,
-    selection_clear,
-    selection_request,
-    selection_notify,
-    colormap_notify,
-    client_message,
-    mapping_notify,
-    _,
-};
-
-/// The types of events a newly created window is expected to handle.  Windows
-/// that are .input_only cannot be shown, but may capture keyboard and other
-/// input events.  Windows that are .input_output can also be shown.  If a new
-/// window is a subwindow of another, .copy_from_parent can be used to inherit
-/// the behavior of the superwindow.
-pub const CreateWindowClass = enum(u16) {
-    copy_from_parent,
-    input_output,
-    input_only,
-};
-
-/// The direction text flows for font.  This value is returned by a variety of
-/// font-related requests.
-pub const DrawDirection = enum(u8) {
-    left_to_right,
-    right_to_left,
-};
-
-/// Error code returned by a Message with code .@"error".  This can be used to
-/// distinguish different types of Error messages.
-pub const ErrorCode = enum(u8) {
-    request = 1,
-    value,
-    window,
-    pixmap,
-    atom,
-    cursor,
-    font,
-    match,
-    drawable,
-    access,
-    alloc,
-    colormap,
-    gcontext,
-    idchoice,
-    name,
-    length,
-    implementation,
-};
-
-/// Details about a change in input focus.
-/// TODO: provide more detail (what is an inferior window?)
-/// https://www.x.org/releases/X11R7.7/doc/xproto/x11protocol.html#id2664378
-pub const FocusDetail = enum(u8) {
-    ancestor,
-    virtual,
-    inferior,
-    nonlinear,
-    nonlinear_virtual,
-    pointer,
-    pointer_root,
-    none,
-};
-
-/// Context for focus change events.  For .normal or .while_grabbed mode, the
-/// keyboard is either not grabbed or grabbed, respetively, while changes in
-/// keyboard grabbing are indicated with .grab and .ungrab.
-pub const FocusMode = enum(u8) {
-    normal,
-    grab,
-    ungrab,
-    while_grabbed,
-};
-
-/// Indicates what happens to focus when focused window becomes invisible.
-/// Focus may revert to the window parent with .parent, to the current screen
-/// root with .pointer_root, or to nothing with .none.
-pub const FocusRevertTo = enum(u8) {
-    none,
-    pointer_root,
-    parent,
-};
-
-/// Resulting state when attempting to grab a window or pointer.  If another
-/// resource is grabbed, the grab fails with .already_grabed.  If timestamp
-/// ordering indicates the grab request is stale, it fails with .invalid_time.
-/// Attempt to grab a window that is not viewable or a pointer to a window or
-/// confined region that is not viewable fails with .not_viewable.  When the
-/// resource is frozen by another client, it fails with .frozen.
-pub const GrabStatus = enum(u8) {
-    success,
-    already_grabbed,
-    invalid_time,
-    not_viewable,
-    frozen,
-};
-
-/// Whether a list of hosts can be used at connection setup.
-pub const ListHostsMode = enum(u8) {
-    disabled,
-    enabled,
-};
-
-/// Current state of window map.  An unmapped window will be .unmapped, while
-/// a mapped window may be .unviewable if an ancestor is unmapped or .viewable
-/// otherwise.
-pub const MapState = enum(u8) {
-    unmapped,
-    unviewable,
-    viewable,
-};
-
-/// Resulting state when attempting to set modifier mapping for keys.  Some
-/// keys may not allow mapping due to server restrictions and will result in
-/// .failed state.  Attempt to set modifier mapping for keys which are pressed
-/// results in .busy state.
-pub const ModifierMappingStatus = enum(u8) {
-    success,
-    busy,
-    failed,
-};
-
-/// The code used to identify a message's type.  Each code corresponds to a
-/// well-defined request struct.  For example, Opcode.destroy_window is the
-/// message code set for a DetroyWindowRequest message.
-pub const Opcode = enum(u8) {
-    create_window = 1,
-    change_window_attributes,
-    get_window_attributes,
-    destroy_window,
-    destroy_subwindows,
-    change_save_set,
-    reparent_window,
-    map_window,
-    map_subwindows,
-    unmap_window,
-    unmap_subwindows,
-    configure_window,
-    circulate_window,
-    get_geometry,
-    query_tree,
-    intern_atom,
-    get_atom_name,
-    change_property,
-    delete_property,
-    get_property,
-    list_properties,
-    set_selection_owner,
-    get_selection_owner,
-    convert_selection,
-    send_event,
-    grab_pointer,
-    ungrab_pointer,
-    grab_button,
-    ungrab_button,
-    change_active_pointer_grab,
-    grab_keyboard,
-    ungrab_keyboard,
-    grab_key,
-    ungrab_key,
-    allow_events,
-    grab_server,
-    ungrab_server,
-    query_pointer,
-    get_motion_events,
-    translate_coordinates,
-    warp_pointer,
-    set_input_focus,
-    get_input_focus,
-    query_keymap,
-    open_font,
-    close_font,
-    query_font,
-    query_text_extents,
-    list_fonts,
-    list_fonts_with_info,
-    set_font_path,
-    get_font_path,
-    create_pixmap,
-    free_pixmap,
-    create_gc,
-    change_gc,
-    copy_gc,
-    set_dashes,
-    set_clip_rectangles,
-    free_gc,
-    clear_area,
-    copy_area,
-    copy_plane,
-    poly_point,
-    poly_line,
-    poly_segment,
-    poly_rectangle,
-    poly_arc,
-    fill_poly,
-    poly_fill_rectangle,
-    poly_fill_arc,
-    put_image,
-    get_image,
-    poly_text_8,
-    poly_text_16,
-    image_text_8,
-    image_text_16,
-    create_colormap,
-    free_colormap,
-    copy_colormap_and_free,
-    install_colormap,
-    uninstall_colotmap,
-    list_installed_colormaps,
-    alloc_color,
-    alloc_named_color,
-    alloc_color_cells,
-    alloc_color_planes,
-    free_colors,
-    store_colors,
-    store_named_color,
-    query_colors,
-    lookup_color,
-    create_cursor,
-    create_glyph_cursor,
-    free_cursor,
-    recolor_cursor,
-    query_best_size,
-    query_extension,
-    list_extensions,
-    change_keyboard_mapping,
-    get_keyboard_mapping,
-    change_keyboard_control,
-    get_keyboard_control,
-    bell,
-    change_pointer_control,
-    get_pointer_control,
-    set_screen_saver,
-    get_screen_saver,
-    change_hosts,
-    list_hosts,
-    set_access_control,
-    set_close_down_mode,
-    kill_client,
-    rotate_properties,
-    force_screen_saver,
-    set_pointer_mapping,
-    get_pointer_mapping,
-    set_modifier_mapping,
-    get_modifier_mapping,
-    no_operation = 127,
-};
-
-pub const PointerMappingStatus = enum(u8) {
-    success,
-    busy,
-};
-
-pub const PropertyChangeState = enum(u8) {
-    new_value,
-    deleted,
-};
-
-pub const ScreenSaverBlanking = enum(u8) {
-    no,
-    yes,
-};
-
-pub const ScreenSaverExposures = enum(u8) {
-    no,
-    yes,
-};
-
-pub const VisibilityChangeState = enum(u8) {
-    unobscured,
-    partially_obscured,
-    fully_obscured,
-};
-
-pub const VisualClass = enum(u8) {
-    static_gray,
-    gray_scale,
-    static_color,
-    pseudo_color,
-    true_color,
-    direct_color,
-};
-
-/// The types of events a window handles.  Windows that are .input_only cannot
-/// be shown, but may capture keyboard and other input events.  Windows that
-/// are .input_output can also be shown.
-pub const WindowClass = enum(u16) {
-    input_output = 1,
-    input_only,
-};
-
-/// Indicates which region of a subwindow should be repositioned when its
-/// parent window is resized.
-pub const WindowGravity = enum(u8) {
-    unmap,
-    north_west,
-    north,
-    north_east,
-    west,
-    center,
-    east,
-    south_west,
-    south,
-    south_east,
-    static,
-};
+const x11 = @import("x11.zig");
 
 pub const CharInfo = extern struct {
     left_side_bearing: i16,
@@ -453,7 +49,7 @@ pub const Screen = extern struct {
     min_installed_maps: u16,
     max_installed_maps: u16,
     root_visual: u32,
-    backing_stores: BackingStores,
+    backing_stores: x11.protocol.BackingStores,
     save_unders: bool,
     root_depth: u8,
     num_depths: u8,
@@ -471,7 +67,7 @@ pub const TimeCoord = extern struct {
 
 pub const Visual = extern struct {
     visual_id: u32,
-    class: VisualClass,
+    class: x11.protocol.VisualClass,
     bits_per_rgb_value: u8,
     colormap_entries: u16,
     red_mask: u32,
@@ -698,7 +294,7 @@ pub const WindowAttributes = packed struct(u32) {
 /// Union of the three basic X11 message types: Error, Reply, and Event.
 /// Error and Event messages are simple 32-byte structs. Reply messages are
 /// each different structures and may contain additional data.
-pub const Message = union(Code) {
+pub const Message = union(x11.protocol.Code) {
     @"error": Error,
     reply: Reply,
     key_press: GenericEvent,
@@ -740,7 +336,7 @@ pub const Message = union(Code) {
 /// X11 server.  Should only be used internally before being cast to a more
 /// suitable type.
 pub const GenericMessage = extern struct {
-    code: Code,
+    code: x11.protocol.Code,
     data_1: u8,
     /// This maps to sequence_number for all errors and replies, and MOST
     /// events, but KeymapNotifyEvent is the odd man out.
@@ -755,8 +351,8 @@ pub const GenericMessage = extern struct {
 /// to find more information about the error.  Use .sequence_number to match
 /// the Error to the most recent Request.
 pub const Error = extern struct {
-    code: Code = .@"error",
-    error_code: ErrorCode,
+    code: x11.protocol.Code = .@"error",
+    error_code: x11.protocol.ErrorCode,
     sequence_number: u16,
     data: u32,
     minor_opcode: u16,
@@ -766,7 +362,7 @@ pub const Error = extern struct {
 
 /// Union of the various X11 Reply structures.  Some requests do not have a
 /// Reply; these are of type void.
-pub const Reply = union(Opcode) {
+pub const Reply = union(x11.protocol.Opcode) {
     create_window: void,
     change_window_attributes: void,
     get_window_attributes: GetWindowAttributesReply,
@@ -894,7 +490,7 @@ pub const Reply = union(Opcode) {
 /// server.  Should only be used internally before being cast to a more
 /// suitable type.
 pub const GenericReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     data_1: u8,
     sequence_number: u16,
     reply_len: u32, // number of extra u32s
@@ -913,7 +509,7 @@ pub const GenericReply = extern struct {
 /// server.  Should only be used internally before being cast to a more
 /// suitable type.
 pub const GenericEvent = extern struct {
-    code: Code,
+    code: x11.protocol.Code,
     data_1: u8,
     /// This maps to sequence_number for MOST events, but KeymapNotifyEvent is
     /// the odd man out.
@@ -929,8 +525,8 @@ pub const GenericEvent = extern struct {
 // **************************************************************************
 
 pub const ChangePropertyRequest = extern struct {
-    opcode: Opcode = .change_property,
-    mode: ChangePropertyMode,
+    opcode: x11.protocol.Opcode = .change_property,
+    mode: x11.protocol.ChangePropertyMode,
     request_len: u16,
     window_id: u32,
     property_id: u32,
@@ -954,7 +550,7 @@ pub const ChangePropertyRequest = extern struct {
 };
 
 pub const CreateWindowRequest = extern struct {
-    opcode: Opcode = .create_window,
+    opcode: x11.protocol.Opcode = .create_window,
     depth: u8,
     request_len: u16,
     window_id: u32,
@@ -964,7 +560,7 @@ pub const CreateWindowRequest = extern struct {
     width: u16 = 200,
     height: u16 = 300,
     border_width: u16 = 0,
-    class: CreateWindowClass = .copy_from_parent,
+    class: x11.protocol.CreateWindowClass = .copy_from_parent,
     visual: u32 = CreateWindowRequest.visual_copy_from_parent,
     value_mask: WindowAttributes,
 
@@ -978,21 +574,21 @@ pub const CreateWindowRequest = extern struct {
 };
 
 pub const DestroyWindowRequest = extern struct {
-    opcode: Opcode = .destroy_window,
+    opcode: x11.protocol.Opcode = .destroy_window,
     unused: u8 = 0,
     request_len: u16 = 2,
     window_id: u32,
 };
 
 pub const GetAtomNameRequest = extern struct {
-    opcode: Opcode = .get_atom_name,
+    opcode: x11.protocol.Opcode = .get_atom_name,
     unused: u8 = 0,
     request_len: u16 = 2,
     atom_id: u32,
 };
 
 pub const GetPropertyRequest = extern struct {
-    opcode: Opcode = .get_property,
+    opcode: x11.protocol.Opcode = .get_property,
     delete: bool,
     request_len: u16 = 6,
     window_id: u32,
@@ -1005,7 +601,7 @@ pub const GetPropertyRequest = extern struct {
 };
 
 pub const InternAtomRequest = extern struct {
-    opcode: Opcode = .intern_atom,
+    opcode: x11.protocol.Opcode = .intern_atom,
     only_if_exists: bool,
     request_len: u16,
     name_len: u16,
@@ -1019,7 +615,7 @@ pub const InternAtomRequest = extern struct {
 };
 
 pub const MapWindowRequest = extern struct {
-    opcode: Opcode = .map_window,
+    opcode: x11.protocol.Opcode = .map_window,
     unused: u8 = 0,
     request_len: u16 = 2,
     window_id: u32,
@@ -1030,19 +626,19 @@ pub const MapWindowRequest = extern struct {
 // **************************************************************************
 
 pub const GetWindowAttributesReply = extern struct {
-    code: Code = .reply,
-    backing_store: BackingStore,
+    code: x11.protocol.Code = .reply,
+    backing_store: x11.protocol.BackingStore,
     sequence_number: u16,
     reply_len: u32 = 3,
     visual: u32,
-    class: WindowClass,
-    bit_gravity: BitGravity,
-    win_gravity: WindowGravity,
+    class: x11.protocol.WindowClass,
+    bit_gravity: x11.protocol.BitGravity,
+    win_gravity: x11.protocol.WindowGravity,
     backing_planes: u32,
     backing_pixel: u32,
     save_under: bool,
     map_is_installed: bool,
-    map_state: MapState,
+    map_state: x11.protocol.MapState,
     override_redirect: bool,
     colormap: u32,
     all_event_masks: EventSet,
@@ -1052,7 +648,7 @@ pub const GetWindowAttributesReply = extern struct {
 };
 
 pub const GetGeometryReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     depth: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1066,7 +662,7 @@ pub const GetGeometryReply = extern struct {
 };
 
 pub const QueryTreeReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1077,7 +673,7 @@ pub const QueryTreeReply = extern struct {
 };
 
 pub const InternAtomReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1086,7 +682,7 @@ pub const InternAtomReply = extern struct {
 };
 
 pub const GetAtomNameReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1095,7 +691,7 @@ pub const GetAtomNameReply = extern struct {
 };
 
 pub const GetPropertyReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     format: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1106,7 +702,7 @@ pub const GetPropertyReply = extern struct {
 };
 
 pub const ListPropertiesReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1115,7 +711,7 @@ pub const ListPropertiesReply = extern struct {
 };
 
 pub const GetSelectionOwnerReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1124,23 +720,23 @@ pub const GetSelectionOwnerReply = extern struct {
 };
 
 pub const GrabPointerReply = extern struct {
-    code: Code = .reply,
-    status: GrabStatus,
+    code: x11.protocol.Code = .reply,
+    status: x11.protocol.GrabStatus,
     sequence_number: u16,
     reply_len: u32 = 0,
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
 pub const GrabKeyboardReply = extern struct {
-    code: Code = .reply,
-    status: GrabStatus,
+    code: x11.protocol.Code = .reply,
+    status: x11.protocol.GrabStatus,
     sequence_number: u16,
     reply_len: u32 = 0,
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
 pub const QueryPointerReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     same_screen: bool,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1155,7 +751,7 @@ pub const QueryPointerReply = extern struct {
 };
 
 pub const GetMotionEventsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1164,7 +760,7 @@ pub const GetMotionEventsReply = extern struct {
 };
 
 pub const TranslateCoordinatesReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     same_screen: bool,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1175,8 +771,8 @@ pub const TranslateCoordinatesReply = extern struct {
 };
 
 pub const GetInputFocusReply = extern struct {
-    code: Code = .reply,
-    revert_to: FocusRevertTo,
+    code: x11.protocol.Code = .reply,
+    revert_to: x11.protocol.FocusRevertTo,
     sequence_number: u16,
     reply_len: u32 = 0,
     focus: u32,
@@ -1184,7 +780,7 @@ pub const GetInputFocusReply = extern struct {
 };
 
 pub const QueryKeymapReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused: u8,
     sequence_number: u16,
     reply_len: u32 = 2,
@@ -1192,7 +788,7 @@ pub const QueryKeymapReply = extern struct {
 };
 
 pub const QueryFontReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1204,7 +800,7 @@ pub const QueryFontReply = extern struct {
     max_char_or_byte2: u16,
     default_char: u16,
     num_properties: u16,
-    draw_direction: DrawDirection,
+    draw_direction: x11.protocol.DrawDirection,
     min_byte1: u8,
     max_byte1: u8,
     all_chars_exist: bool,
@@ -1214,8 +810,8 @@ pub const QueryFontReply = extern struct {
 };
 
 pub const QueryTextExtentsReply = extern struct {
-    code: Code = .reply,
-    draw_direction: DrawDirection,
+    code: x11.protocol.Code = .reply,
+    draw_direction: x11.protocol.DrawDirection,
     sequence_number: u16,
     reply_len: u32 = 0,
     font_ascent: i16,
@@ -1229,7 +825,7 @@ pub const QueryTextExtentsReply = extern struct {
 };
 
 pub const ListFontsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1238,7 +834,7 @@ pub const ListFontsReply = extern struct {
 };
 
 pub const ListFontsWithInfoReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     name_len: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1250,7 +846,7 @@ pub const ListFontsWithInfoReply = extern struct {
     max_char_or_byte2: u16,
     default_char: u16,
     num_properties: u16,
-    draw_direction: DrawDirection,
+    draw_direction: x11.protocol.DrawDirection,
     min_byte1: u8,
     max_byte1: u8,
     all_chars_exist: bool,
@@ -1262,7 +858,7 @@ pub const ListFontsWithInfoReply = extern struct {
 // TODO: determine naming for sentinel
 
 pub const ListFontsWithInfoReplySentinel = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     last_reply_indicator: u8 = 0,
     sequence_number: u16,
     reply_len: u32 = 7,
@@ -1270,7 +866,7 @@ pub const ListFontsWithInfoReplySentinel = extern struct {
 };
 
 pub const GetFontPathReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1279,7 +875,7 @@ pub const GetFontPathReply = extern struct {
 };
 
 pub const GetImageReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     depth: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1288,7 +884,7 @@ pub const GetImageReply = extern struct {
 };
 
 pub const ListInstalledColormapsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1297,7 +893,7 @@ pub const ListInstalledColormapsReply = extern struct {
 };
 
 pub const AllocColorReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1310,7 +906,7 @@ pub const AllocColorReply = extern struct {
 };
 
 pub const AllocNamedColorReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1325,7 +921,7 @@ pub const AllocNamedColorReply = extern struct {
 };
 
 pub const AllocColorCellsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1335,7 +931,7 @@ pub const AllocColorCellsReply = extern struct {
 };
 
 pub const AllocColorPlanesReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u16,
@@ -1348,7 +944,7 @@ pub const AllocColorPlanesReply = extern struct {
 };
 
 pub const QueryColorsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1357,7 +953,7 @@ pub const QueryColorsReply = extern struct {
 };
 
 pub const LookupColorReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1371,7 +967,7 @@ pub const LookupColorReply = extern struct {
 };
 
 pub const QueryBestSizeReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1381,7 +977,7 @@ pub const QueryBestSizeReply = extern struct {
 };
 
 pub const QueryExtensionReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1393,7 +989,7 @@ pub const QueryExtensionReply = extern struct {
 };
 
 pub const ListExtensionsReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     num_names: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1401,7 +997,7 @@ pub const ListExtensionsReply = extern struct {
 };
 
 pub const GetKeyboardMappingReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     keysyms_per_keycode: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1409,8 +1005,8 @@ pub const GetKeyboardMappingReply = extern struct {
 };
 
 pub const GetKeyboardControlReply = extern struct {
-    code: Code = .reply,
-    global_auto_repeat: AutoRepeat,
+    code: x11.protocol.Code = .reply,
+    global_auto_repeat: x11.protocol.AutoRepeat,
     sequence_number: u16,
     reply_len: u32 = 5,
     led_mask: u32,
@@ -1422,7 +1018,7 @@ pub const GetKeyboardControlReply = extern struct {
 };
 
 pub const GetPointerControlReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unused_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
@@ -1433,20 +1029,20 @@ pub const GetPointerControlReply = extern struct {
 };
 
 pub const GetScreenSaverReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     unsued_1: u8,
     sequence_number: u16,
     reply_len: u32 = 0,
     timeout: u16,
     interval: u16,
-    prefer_blanking: ScreenSaverBlanking,
-    allow_exposures: ScreenSaverExposures,
+    prefer_blanking: x11.protocol.ScreenSaverBlanking,
+    allow_exposures: x11.protocol.ScreenSaverExposures,
     unused_2: [18]u8 = [1]u8{0} ** 18,
 };
 
 pub const ListHostsReply = extern struct {
-    code: Code = .reply,
-    mode: ListHostsMode,
+    code: x11.protocol.Code = .reply,
+    mode: x11.protocol.ListHostsMode,
     sequence_number: u16,
     reply_len: u32,
     num_hosts: u16,
@@ -1454,15 +1050,15 @@ pub const ListHostsReply = extern struct {
 };
 
 pub const SetPointerMappingReply = extern struct {
-    code: Code = .reply,
-    status: PointerMappingStatus,
+    code: x11.protocol.Code = .reply,
+    status: x11.protocol.PointerMappingStatus,
     sequence_number: u16,
     reply_len: u32 = 0,
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
 pub const GetPointerMappingReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     map_len: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1470,15 +1066,15 @@ pub const GetPointerMappingReply = extern struct {
 };
 
 pub const SetModifierMappingReply = extern struct {
-    code: Code = .reply,
-    status: ModifierMappingStatus,
+    code: x11.protocol.Code = .reply,
+    status: x11.protocol.ModifierMappingStatus,
     sequence_number: u16,
     reply_len: u32 = 0,
     unused: [24]u8 = [1]u8{0} ** 24,
 };
 
 pub const GetModifierMappingReply = extern struct {
-    code: Code = .reply,
+    code: x11.protocol.Code = .reply,
     keycodes_per_modifier: u8,
     sequence_number: u16,
     reply_len: u32,
@@ -1490,30 +1086,30 @@ pub const GetModifierMappingReply = extern struct {
 // **************************************************************************
 
 pub const FocusInEvent = extern struct {
-    code: Code = .focus_in,
-    detail: FocusDetail,
+    code: x11.protocol.Code = .focus_in,
+    detail: x11.protocol.FocusDetail,
     sequence_number: u16,
     window_id: u32,
-    mode: FocusMode,
+    mode: x11.protocol.FocusMode,
     unused: [23]u8 = [1]u8{0} ** 23,
 };
 
 pub const FocusOutEvent = extern struct {
-    code: Code = .focus_out,
-    detail: FocusDetail,
+    code: x11.protocol.Code = .focus_out,
+    detail: x11.protocol.FocusDetail,
     sequence_number: u16,
     window_id: u32,
-    mode: FocusMode,
+    mode: x11.protocol.FocusMode,
     unused: [23]u8 = [1]u8{0} ** 23,
 };
 
 pub const KeymapNotifyEvent = extern struct {
-    code: Code = .keymap_notify,
+    code: x11.protocol.Code = .keymap_notify,
     keys: [31]u8 = [1]u8{0} ** 31,
 };
 
 pub const ExposeEvent = extern struct {
-    code: Code = .expose,
+    code: x11.protocol.Code = .expose,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
@@ -1526,16 +1122,16 @@ pub const ExposeEvent = extern struct {
 };
 
 pub const VisibilityNotifyEvent = extern struct {
-    code: Code = .visibility_notify,
+    code: x11.protocol.Code = .visibility_notify,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
-    state: VisibilityChangeState,
+    state: x11.protocol.VisibilityChangeState,
     unused_2: [23]u8 = [1]u8{0} ** 23,
 };
 
 pub const MapNotifyEvent = extern struct {
-    code: Code = .map_notify,
+    code: x11.protocol.Code = .map_notify,
     unused_1: u8,
     sequence_number: u16,
     event_window_id: u32,
@@ -1545,7 +1141,7 @@ pub const MapNotifyEvent = extern struct {
 };
 
 pub const ReparentNotifyEvent = extern struct {
-    code: Code = .reparent_notify,
+    code: x11.protocol.Code = .reparent_notify,
     unused_1: u8,
     sequence_number: u16,
     event_window_id: u32,
@@ -1558,18 +1154,18 @@ pub const ReparentNotifyEvent = extern struct {
 };
 
 pub const PropertyNotifyEvent = extern struct {
-    code: Code = .property_notify,
+    code: x11.protocol.Code = .property_notify,
     unused_1: u8,
     sequence_number: u16,
     window_id: u32,
     atom_id: u32,
     timestamp: u32,
-    state: PropertyChangeState,
+    state: x11.protocol.PropertyChangeState,
     unused_2: [15]u8 = [1]u8{0} ** 15,
 };
 
 pub const ClientMessageEvent = extern struct {
-    code: Code = .client_message,
+    code: x11.protocol.Code = .client_message,
     format: u8,
     sequence_number: u16,
     window_id: u32,
@@ -1577,7 +1173,7 @@ pub const ClientMessageEvent = extern struct {
     data: [20]u8,
 
     pub const Int8 = extern struct {
-        code: Code = .client_message,
+        code: x11.protocol.Code = .client_message,
         format: u8 = 8,
         sequence_number: u16,
         window_id: u32,
@@ -1586,7 +1182,7 @@ pub const ClientMessageEvent = extern struct {
     };
 
     pub const Int16 = extern struct {
-        code: Code = .client_message,
+        code: x11.protocol.Code = .client_message,
         format: u8 = 16,
         sequence_number: u16,
         window_id: u32,
@@ -1595,7 +1191,7 @@ pub const ClientMessageEvent = extern struct {
     };
 
     pub const Int32 = extern struct {
-        code: Code = .client_message,
+        code: x11.protocol.Code = .client_message,
         format: u8 = 32,
         sequence_number: u16,
         window_id: u32,
