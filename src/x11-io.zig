@@ -1,20 +1,32 @@
+/// Global keyboard auto-repeat mode.  When .on, multiple key press and key
+/// release events will be generated while a key is held down.
 pub const AutoRepeat = enum(u8) {
     off,
     on,
 };
 
+/// Backing store mode requested when sending a CreateWindow request.  A mode
+/// of .not_useful tells the server this window will not benefit from backing
+/// store.  A mode of .when_mapped tells the server the window would benefit
+/// from having a backing store for obscured regions when mapped, while a mode
+/// of .always indicates the window would benefit from preserving the backing
+/// store even when the window is unmapped.
 pub const BackingStore = enum(u8) {
     not_useful,
     when_mapped,
     always,
 };
 
+/// Support for backing stores declared by X11 server for a screen specified
+/// during handshake.
 pub const BackingStores = enum(u8) {
     never,
     when_mapped,
     always,
 };
 
+/// Indicates which region of a window should be retained when the window is
+/// resized.
 pub const BitGravity = enum(u8) {
     forget,
     north_west,
@@ -27,6 +39,16 @@ pub const BitGravity = enum(u8) {
     south,
     south_east,
     static,
+};
+
+/// Keyboard auto-repeat mode requested when sending a ChangeKeyboardControl
+/// request.  When .on, multiple key press and key release events will be
+/// generated while a key is held down.  The .default is determined by the
+/// specific key being held down.
+pub const ChangeAutoRepeat = enum(u8) {
+    off,
+    on,
+    default,
 };
 
 /// How existing property values should be merged with new ones when sending a
@@ -125,6 +147,9 @@ pub const ErrorCode = enum(u8) {
     implementation,
 };
 
+/// Details about a change in input focus.
+/// TODO: provide more detail (what is an inferior window?)
+/// https://www.x.org/releases/X11R7.7/doc/xproto/x11protocol.html#id2664378
 pub const FocusDetail = enum(u8) {
     ancestor,
     virtual,
@@ -136,6 +161,9 @@ pub const FocusDetail = enum(u8) {
     none,
 };
 
+/// Context for focus change events.  For .normal or .while_grabbed mode, the
+/// keyboard is either not grabbed or grabbed, respetively, while changes in
+/// keyboard grabbing are indicated with .grab and .ungrab.
 pub const FocusMode = enum(u8) {
     normal,
     grab,
@@ -143,12 +171,21 @@ pub const FocusMode = enum(u8) {
     while_grabbed,
 };
 
+/// Indicates what happens to focus when focused window becomes invisible.
+/// Focus may revert to the window parent with .parent, to the current screen
+/// root with .pointer_root, or to nothing with .none.
 pub const FocusRevertTo = enum(u8) {
     none,
     pointer_root,
     parent,
 };
 
+/// Resulting state when attempting to grab a window or pointer.  If another
+/// resource is grabbed, the grab fails with .already_grabed.  If timestamp
+/// ordering indicates the grab request is stale, it fails with .invalid_time.
+/// Attempt to grab a window that is not viewable or a pointer to a window or
+/// confined region that is not viewable fails with .not_viewable.  When the
+/// resource is frozen by another client, it fails with .frozen.
 pub const GrabStatus = enum(u8) {
     success,
     already_grabbed,
@@ -157,17 +194,25 @@ pub const GrabStatus = enum(u8) {
     frozen,
 };
 
+/// Whether a list of hosts can be used at connection setup.
 pub const ListHostsMode = enum(u8) {
     disabled,
     enabled,
 };
 
+/// Current state of window map.  An unmapped window will be .unmapped, while
+/// a mapped window may be .unviewable if an ancestor is unmapped or .viewable
+/// otherwise.
 pub const MapState = enum(u8) {
     unmapped,
     unviewable,
     viewable,
 };
 
+/// Resulting state when attempting to set modifier mapping for keys.  Some
+/// keys may not allow mapping due to server restrictions and will result in
+/// .failed state.  Attempt to set modifier mapping for keys which are pressed
+/// results in .busy state.
 pub const ModifierMappingStatus = enum(u8) {
     success,
     busy,
@@ -343,6 +388,8 @@ pub const WindowClass = enum(u16) {
     input_only,
 };
 
+/// Indicates which region of a subwindow should be repositioned when its
+/// parent window is resized.
 pub const WindowGravity = enum(u8) {
     unmap,
     north_west,
