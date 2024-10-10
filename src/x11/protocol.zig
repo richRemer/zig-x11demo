@@ -1,5 +1,7 @@
 //! Network protocol definitions for X11 protocol.
 
+const arch = @import("builtin").cpu.arch;
+
 // ***************************************************************************
 // SECTION 1
 // ENUMS
@@ -352,14 +354,24 @@ pub const Opcode = enum(u8) {
     no_operation = 127,
 };
 
+/// The reply status when attempting to map the pointer.
 pub const PointerMappingStatus = enum(u8) {
     success,
     busy,
 };
 
+/// The nature of a property change reported by the server.
 pub const PropertyChangeState = enum(u8) {
     new_value,
     deleted,
+};
+
+/// The state used to identify the nature of a connection setup reply.  Each
+/// state corresponds to a different well-defined setup reply struct.
+pub const SetupState = enum(u8) {
+    failure,
+    success,
+    authenticate,
 };
 
 pub const ScreenSaverBlanking = enum(u8) {
@@ -432,7 +444,7 @@ pub const Depth = extern struct {
     unused_1: u8,
     num_visuals: u16,
     unused_2: u32,
-    // [num_visuals]Visual
+    // visuals: [num_visuals]Visual
 };
 
 /// Atom name and value for a font property.
@@ -441,8 +453,8 @@ pub const FontProp = extern struct {
     value: u32,
 };
 
-/// Descriptor of screen pixel format.
-pub const PixelFormat = extern struct {
+/// Descriptor of screen pixmap format.
+pub const PixmapFormat = extern struct {
     depth: u8,
     bits_per_pixel: u8,
     scanline_pad: u8,
@@ -475,13 +487,13 @@ pub const Screen = extern struct {
     save_unders: bool,
     root_depth: u8,
     num_depths: u8,
-    // [num_depths]Depth
+    // depths: [num_depths]Depth
 };
 
 /// Length-prefixed string.
 pub const String = extern struct {
     name_len: u8,
-    // [name_len]u8
+    // name: [name_len]u8
 };
 
 /// Position where pointer was located at a specific timestamp.
@@ -771,6 +783,63 @@ pub const Error = extern struct {
 // SECTION 4.2
 // REPLIES
 // ***************************************************************************
+
+/// Generic reply structure used only once during connection setup.
+pub const UnknownSetupReply = extern struct {
+    state: SetupState,
+    field_1: u8,
+    field_2: u16,
+    field_3: u16,
+    data_len: u16,
+};
+
+/// Connection setup reply sent by X11 server to indicate missing or invalid
+/// authentication.
+pub const SetupAuthenticateReply = extern struct {
+    state: SetupState = .authenticate,
+    pad: [5]u8 = [_]u8{0} ** 5,
+    data_len: u16,
+    // reason: [data_len*4]u8
+    // padding: [0]u8 (protocol doesn't distinguish data/padding)
+};
+
+/// Connection setup reply sent by X11 server to indicate a failure.
+pub const SetupFailureReply = extern struct {
+    state: SetupState = .failure,
+    reason_len: u8,
+    protocol_major_version: u16,
+    protocol_minor_version: u16,
+    data_len: u16,
+    // reason: [reason_len]u8
+    // padding: [data_len*4-reason_len]u8
+};
+
+/// Connection setup reply sent by X11 server to indicate success.
+pub const SetupSuccessReply = extern struct {
+    state: SetupState = .success,
+    pad0: u8 = 0,
+    protocol_major_version: u16,
+    protocol_minor_version: u16,
+    data_len: u16,
+    release_number: u32,
+    resource_id_base: u32,
+    resource_id_mask: u32,
+    motion_buffer_size: u32,
+    vendor_len: u16,
+    maximum_request_len: u16,
+    num_screens: u8,
+    num_formats: u8,
+    image_byte_order: u8,
+    bitmap_format_bit_order: u8,
+    bitmap_format_scanline_unit: u8,
+    bitmap_format_scanline_pad: u8,
+    min_keycode: u8,
+    max_keycode: u8,
+    pad1: u32 = 0,
+    // vendor: [vendor_len]u8 + padding to multiple of 4 bytes
+    // formats: [num_formats]PixmapFormat
+    // screens: [num_screens]Screen
+};
 
 /// Generic reply structure that can be used when reading messages from an X11
 /// server.  Should only be used internally before being cast to a more
@@ -1386,6 +1455,16 @@ pub const ClientMessageEvent = extern struct {
 // SECTION 5
 // REQUESTS
 // ***************************************************************************
+
+pub const SetupRequest = extern struct {
+    byte_order: u8 = if (arch.endian() == .big) 0x42 else 0x6c,
+    pad0: u8 = 0,
+    protocol_major_version: u16 = 11,
+    protocol_minor_version: u16 = 0,
+    authorization_protocol_name_len: u16 = 0,
+    authorization_protocol_data_len: u16 = 0,
+    pad1: u16 = 0,
+};
 
 pub const ChangePropertyRequest = extern struct {
     opcode: Opcode = .change_property,

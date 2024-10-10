@@ -1,5 +1,4 @@
 const std = @import("std");
-const setup = @import("x11-setup.zig");
 const arch = @import("builtin").cpu.arch;
 const assert = std.debug.assert;
 
@@ -36,9 +35,9 @@ pub const Server = struct {
     write_mutex: std.Thread.Mutex = .{},
 
     vendor: []u8,
-    formats: []protocol.PixelFormat,
+    formats: []protocol.PixmapFormat,
     success_data: []u8,
-    success: *setup.Success,
+    success: *protocol.SetupSuccessReply,
 
     pub const Atom = struct {
         allocator: std.mem.Allocator,
@@ -88,12 +87,12 @@ pub const Server = struct {
         errdefer allocator.free(success_data);
 
         const success_address = @intFromPtr(success_data.ptr);
-        const success = @as(*setup.Success, @ptrFromInt(success_address));
-        const vendor_data = success_data[@sizeOf(setup.Success)..];
+        const success = @as(*protocol.SetupSuccessReply, @ptrFromInt(success_address));
+        const vendor_data = success_data[@sizeOf(protocol.SetupSuccessReply)..];
         const vendor = vendor_data[0..success.vendor_len];
         const formats_data = vendor_data[pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
-        const formats_ptr: [*]protocol.PixelFormat = @ptrFromInt(formats_address);
+        const formats_ptr: [*]protocol.PixmapFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
         const screen = first_success_screen(success) orelse {
@@ -358,7 +357,7 @@ pub const Server = struct {
     }
 
     /// Read the next message, if one is available.  Return true if a message
-    /// was not available.
+    /// was read.
     pub fn readOne(this: *Server) !bool {
         return this.readOneWithTimeout(0);
     }
@@ -385,12 +384,12 @@ pub const Server = struct {
         if (std.os.linux.poll(&pollfds, pollfds.len, timeout) == 0) {
             return false;
         } else {
-            if (pollfds[0].revents & std.os.linux.POLL.ERR > 0) {
+            if (pollfds[0].revents & POLL.ERR > 0) {
                 log.err("socket poll error", .{});
                 return error.X11SocketError;
             }
 
-            if (pollfds[0].revents & std.os.linux.POLL.HUP > 0) {
+            if (pollfds[0].revents & POLL.HUP > 0) {
                 log.err("socket poll error", .{});
                 return error.X11SocketError;
             }
@@ -681,34 +680,34 @@ pub fn handshake(
     const reader = connection.stream.reader();
     const writer = connection.stream.writer();
 
-    try writer.writeStruct(setup.Request{});
+    try writer.writeStruct(protocol.SetupRequest{});
 
     // first couple bytes of response have status and length of data
-    const header_len = @sizeOf(setup.Header);
-    const header_data = try allocator.alloc(u8, header_len);
-    defer allocator.free(header_data);
+    const reply_len = @sizeOf(protocol.UnknownSetupReply);
+    const reply_data = try allocator.alloc(u8, reply_len);
+    defer allocator.free(reply_data);
 
-    _ = try reader.readAll(header_data);
+    _ = try reader.readAll(reply_data);
 
-    const header = fromPtr(setup.Header, header_data.ptr);
-    const success_len = header_len + header.data_len * 4;
+    const reply = fromPtr(protocol.UnknownSetupReply, reply_data.ptr);
+    const success_len = reply_len + reply.data_len * 4;
     const success_data = try allocator.alloc(u8, success_len);
     defer allocator.free(success_data);
 
     // write header to data and copy remaining bytes from socket
-    @memcpy(success_data[0..header_len], header_data);
-    _ = try reader.readAll(success_data[header_len..]);
+    @memcpy(success_data[0..reply_len], reply_data);
+    _ = try reader.readAll(success_data[reply_len..]);
     // data now contains full setup success with all related data
 
-    switch (header.state) {
+    switch (reply.state) {
         .authenticate => {
             // TODO: figure out length of reason
-            log.err("X11 access denied: {s}", .{success_data[header_len..]});
+            log.err("X11 access denied: {s}", .{success_data[reply_len..]});
             return error.X11AccessDenied;
         },
         .failure => {
-            const failure = fromPtr(setup.Failure, header_data.ptr);
-            const reason_data = success_data[header_len..];
+            const failure = fromPtr(protocol.SetupFailureReply, reply_data.ptr);
+            const reason_data = success_data[reply_len..];
             const reason = reason_data[0..failure.reason_len];
 
             log.err("X{d} (rev. {d}) connection setup failed: {s}", .{
@@ -720,7 +719,7 @@ pub fn handshake(
             return error.X11ProtocolError;
         },
         .success => {
-            const success = fromPtr(setup.Success, success_data.ptr);
+            const success = fromPtr(protocol.SetupSuccessReply, success_data.ptr);
 
             log.debug("connected to X{d} (rev. {d})", .{
                 success.protocol_major_version,
@@ -756,13 +755,15 @@ pub const Protocol = enum(u8) {
 // **************************************************************************
 
 // TOOD: make this a static method of some type
-inline fn first_success_screen(success: *setup.Success) ?*protocol.Screen {
+inline fn first_success_screen(
+    success: *protocol.SetupSuccessReply,
+) ?*protocol.Screen {
     if (success.num_screens > 0) {
         var address = @intFromPtr(success);
 
-        address += @sizeOf(setup.Success);
+        address += @sizeOf(protocol.SetupSuccessReply);
         address += pad(u16, success.vendor_len);
-        address += success.num_formats * @sizeOf(protocol.PixelFormat);
+        address += success.num_formats * @sizeOf(protocol.PixmapFormat);
 
         return @ptrFromInt(address);
     } else {
