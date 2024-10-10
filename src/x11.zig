@@ -1,16 +1,14 @@
 const std = @import("std");
 const setup = @import("x11-setup.zig");
-const io = @import("x11-io.zig");
 const arch = @import("builtin").cpu.arch;
 const assert = std.debug.assert;
 
 pub const protocol = @import("x11/protocol.zig");
 pub const log = std.log.scoped(.x11);
-pub const Message = io.Message;
 
-const GenericEvent = io.GenericEvent;
-const GenericMessage = io.GenericMessage;
-const GenericReply = io.GenericReply;
+const UnknownEvent = protocol.UnknownEvent;
+const UnknownMessage = protocol.UnknownMessage;
+const UnknownReply = protocol.UnknownReply;
 
 /// Used by X11 to specify a missing resource ID.
 pub const none: u32 = 0;
@@ -73,8 +71,8 @@ pub const Server = struct {
                 else => @panic("property format is not valid"),
             }
 
-            const reply = fromPtr(io.GetPropertyReply, this.buffer.ptr);
-            const data = this.buffer[@sizeOf(io.GetPropertyReply)..];
+            const reply = fromPtr(protocol.GetPropertyReply, this.buffer.ptr);
+            const data = this.buffer[@sizeOf(protocol.GetPropertyReply)..];
             const address = @intFromPtr(data.ptr);
 
             return @as([*]T, @ptrFromInt(address))[0..reply.value_len];
@@ -148,7 +146,7 @@ pub const Server = struct {
 
         const format = @sizeOf(T) * 8;
         const data_len: u32 = @intCast(value.len);
-        const mode = io.ChangePropertyMode.replace; // TOOD: support all modes
+        const mode = protocol.ChangePropertyMode.replace; // TOOD: support all modes
         const writer = this.connection.stream.writer();
         const data_size = data_len * @sizeOf(T);
         const data = @as([*]const u8, @ptrCast(value.ptr))[0..data_size];
@@ -157,9 +155,9 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.ChangePropertyRequest{
+        try writer.writeStruct(protocol.ChangePropertyRequest{
             .mode = mode,
-            .request_len = io.ChangePropertyRequest.requestLen(format, data_len),
+            .request_len = protocol.ChangePropertyRequest.requestLen(format, data_len),
             .window_id = window_id,
             .property_id = property_id,
             .type_id = none, // ignored? (docs say "uninterpreted")
@@ -179,9 +177,9 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.CreateWindowRequest{
+        try writer.writeStruct(protocol.CreateWindowRequest{
             .depth = 0, // TODO: figure out root window depth
-            .request_len = io.CreateWindowRequest.requestLen(num_flags),
+            .request_len = protocol.CreateWindowRequest.requestLen(num_flags),
             .window_id = window_id,
             .parent_id = this.root_window_id,
             .class = protocol.CreateWindowClass.input_output,
@@ -203,7 +201,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.DestroyWindowRequest{
+        try writer.writeStruct(protocol.DestroyWindowRequest{
             .window_id = window_id,
         });
     }
@@ -214,7 +212,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.GetAtomNameRequest{
+        try writer.writeStruct(protocol.GetAtomNameRequest{
             .atom_id = atom_id,
         });
 
@@ -229,8 +227,8 @@ pub const Server = struct {
         this.allocator.free(reply_data);
         this.reply_data = null;
 
-        const reply = fromPtr(io.GetAtomNameReply, buffer.ptr);
-        const name = buffer[@sizeOf(io.GetAtomNameReply)..][0..reply.name_len];
+        const reply = fromPtr(protocol.GetAtomNameReply, buffer.ptr);
+        const name = buffer[@sizeOf(protocol.GetAtomNameReply)..][0..reply.name_len];
 
         return Atom{
             .allocator = this.allocator,
@@ -250,7 +248,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.GetPropertyRequest{
+        try writer.writeStruct(protocol.GetPropertyRequest{
             .delete = false,
             .window_id = window_id,
             .property_id = property_id,
@@ -269,7 +267,7 @@ pub const Server = struct {
         this.allocator.free(reply_data);
         this.reply_data = null;
 
-        const reply = fromPtr(io.GetPropertyReply, buffer.ptr);
+        const reply = fromPtr(protocol.GetPropertyReply, buffer.ptr);
         const size = switch (reply.format) {
             0, 8, 16, 32 => |bits| bits / 8,
             else => return error.X11ProtocolError,
@@ -290,9 +288,9 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.InternAtomRequest{
+        try writer.writeStruct(protocol.InternAtomRequest{
             .only_if_exists = must_exist,
-            .request_len = io.InternAtomRequest.requestLen(name.len),
+            .request_len = protocol.InternAtomRequest.requestLen(name.len),
             .name_len = @intCast(name.len),
         });
 
@@ -304,7 +302,7 @@ pub const Server = struct {
         }
 
         const reply_data = this.reply_data.?;
-        const reply = fromPtr(io.InternAtomReply, reply_data.ptr);
+        const reply = fromPtr(protocol.InternAtomReply, reply_data.ptr);
 
         this.allocator.free(reply_data);
         this.reply_data = null;
@@ -318,7 +316,7 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
-        try writer.writeStruct(io.MapWindowRequest{
+        try writer.writeStruct(protocol.MapWindowRequest{
             .window_id = window_id,
         });
     }
@@ -417,21 +415,21 @@ pub const Server = struct {
         this.read_mutex.lock();
         defer this.read_mutex.unlock();
 
-        const info = try reader.readStruct(GenericMessage);
+        const info = try reader.readStruct(UnknownMessage);
         const code: protocol.Code = @enumFromInt(@intFromEnum(info.code) & 0x7f);
         const message: ?Message = switch (code) {
             .@"error" => Message{
-                .@"error" = fromPtr(io.Error, &info),
+                .@"error" = fromPtr(protocol.Error, &info),
             },
             .reply => blk: {
-                const generic = fromPtr(GenericReply, &info);
+                const generic = fromPtr(UnknownReply, &info);
                 const generic_data = std.mem.asBytes(&generic);
                 const data = try this.allocator.alloc(u8, generic.sizeOf());
                 errdefer this.allocator.free(data);
 
                 // write generic to data; copy extended bytes from socket
-                @memcpy(data[0..@sizeOf(GenericReply)], generic_data);
-                _ = try reader.readAll(data[@sizeOf(GenericReply)..]);
+                @memcpy(data[0..@sizeOf(UnknownReply)], generic_data);
+                _ = try reader.readAll(data[@sizeOf(UnknownReply)..]);
                 // data now contains full reply with all related data
 
                 if (this.reply_data != null) {
@@ -442,31 +440,31 @@ pub const Server = struct {
                 break :blk null; // null result won't trigger handler
             },
             .focus_in => Message{
-                .focus_in = fromPtr(io.FocusInEvent, &info),
+                .focus_in = fromPtr(protocol.FocusInEvent, &info),
             },
             .focus_out => Message{
-                .focus_out = fromPtr(io.FocusOutEvent, &info),
+                .focus_out = fromPtr(protocol.FocusOutEvent, &info),
             },
             .keymap_notify => Message{
-                .keymap_notify = fromPtr(io.KeymapNotifyEvent, &info),
+                .keymap_notify = fromPtr(protocol.KeymapNotifyEvent, &info),
             },
             .expose => Message{
-                .expose = fromPtr(io.ExposeEvent, &info),
+                .expose = fromPtr(protocol.ExposeEvent, &info),
             },
             .visibility_notify => Message{
-                .visibility_notify = fromPtr(io.VisibilityNotifyEvent, &info),
+                .visibility_notify = fromPtr(protocol.VisibilityNotifyEvent, &info),
             },
             .map_notify => Message{
-                .map_notify = fromPtr(io.MapNotifyEvent, &info),
+                .map_notify = fromPtr(protocol.MapNotifyEvent, &info),
             },
             .reparent_notify => Message{
-                .reparent_notify = fromPtr(io.ReparentNotifyEvent, &info),
+                .reparent_notify = fromPtr(protocol.ReparentNotifyEvent, &info),
             },
             .property_notify => Message{
-                .property_notify = fromPtr(io.PropertyNotifyEvent, &info),
+                .property_notify = fromPtr(protocol.PropertyNotifyEvent, &info),
             },
             .client_message => Message{
-                .client_message = fromPtr(io.ClientMessageEvent, &info),
+                .client_message = fromPtr(protocol.ClientMessageEvent, &info),
             },
             else => null,
         };
@@ -475,6 +473,173 @@ pub const Server = struct {
             this.handler.?(message.?, this.handler_context);
         }
     }
+};
+
+/// Union of the three basic X11 message types: Error, Reply, and Event.
+/// Error and Event messages are simple 32-byte structs. Reply messages are
+/// each different structures and may contain additional data.
+pub const Message = union(protocol.Code) {
+    @"error": protocol.Error,
+    reply: Reply,
+    key_press: protocol.UnknownEvent,
+    key_release: protocol.UnknownEvent,
+    button_press: protocol.UnknownEvent,
+    button_release: protocol.UnknownEvent,
+    motion_notify: protocol.UnknownEvent,
+    enter_notify: protocol.UnknownEvent,
+    leave_notify: protocol.UnknownEvent,
+    focus_in: protocol.FocusInEvent,
+    focus_out: protocol.FocusOutEvent,
+    keymap_notify: protocol.KeymapNotifyEvent,
+    expose: protocol.ExposeEvent,
+    graphics_exposure: protocol.UnknownEvent,
+    no_exposure: protocol.UnknownEvent,
+    visibility_notify: protocol.VisibilityNotifyEvent,
+    create_notify: protocol.UnknownEvent,
+    destroy_notify: protocol.UnknownEvent,
+    unmap_notify: protocol.UnknownEvent,
+    map_notify: protocol.MapNotifyEvent,
+    map_request: protocol.UnknownEvent,
+    reparent_notify: protocol.ReparentNotifyEvent,
+    configure_notify: protocol.UnknownEvent,
+    configure_request: protocol.UnknownEvent,
+    gravity_notify: protocol.UnknownEvent,
+    resize_request: protocol.UnknownEvent,
+    circulate_notify: protocol.UnknownEvent,
+    circulate_request: protocol.UnknownEvent,
+    property_notify: protocol.PropertyNotifyEvent,
+    selection_clear: protocol.UnknownEvent,
+    selection_request: protocol.UnknownEvent,
+    selection_notify: protocol.UnknownEvent,
+    colormap_notify: protocol.UnknownEvent,
+    client_message: protocol.ClientMessageEvent,
+    mapping_notify: protocol.UnknownEvent,
+};
+
+/// Union of the various X11 Reply structures.  Some requests do not have a
+/// Reply; these are of type void.
+pub const Reply = union(protocol.Opcode) {
+    create_window: void,
+    change_window_attributes: void,
+    get_window_attributes: protocol.GetWindowAttributesReply,
+    destroy_window: void,
+    destroy_subwindows: void,
+    change_save_set: void,
+    reparent_window: void,
+    map_window: void,
+    map_subwindows: void,
+    unmap_window: void,
+    unmap_subwindows: void,
+    configure_window: void,
+    circulate_window: void,
+    get_geometry: protocol.GetGeometryReply,
+    query_tree: protocol.QueryTreeReply,
+    intern_atom: protocol.InternAtomReply,
+    get_atom_name: protocol.GetAtomNameReply,
+    change_property: void,
+    delete_property: void,
+    get_property: protocol.GetPropertyReply,
+    list_properties: protocol.ListPropertiesReply,
+    set_selection_owner: void,
+    get_selection_owner: protocol.GetSelectionOwnerReply,
+    convert_selection: void,
+    send_event: void,
+    grab_pointer: protocol.GrabPointerReply,
+    ungrab_pointer: void,
+    grab_button: void,
+    ungrab_button: void,
+    change_active_pointer_grab: void,
+    grab_keyboard: protocol.GrabKeyboardReply,
+    ungrab_keyboard: void,
+    grab_key: void,
+    ungrab_key: void,
+    allow_events: void,
+    grab_server: void,
+    ungrab_server: void,
+    query_pointer: protocol.QueryPointerReply,
+    get_motion_events: protocol.GetMotionEventsReply,
+    translate_coordinates: protocol.TranslateCoordinatesReply,
+    warp_pointer: void,
+    set_input_focus: void,
+    get_input_focus: protocol.GetInputFocusReply,
+    query_keymap: protocol.QueryKeymapReply,
+    open_font: void,
+    close_font: void,
+    query_font: protocol.QueryFontReply,
+    query_text_extents: protocol.QueryTextExtentsReply,
+    list_fonts: protocol.ListFontsReply,
+    // TODO: ListFontsWithInfoReply | ListFontsWithInfoReplySentinel
+    list_fonts_with_info: void,
+    set_font_path: void,
+    get_font_path: protocol.GetFontPathReply,
+    create_pixmap: void,
+    free_pixmap: void,
+    create_gc: void,
+    change_gc: void,
+    copy_gc: void,
+    set_dashes: void,
+    set_clip_rectangles: void,
+    free_gc: void,
+    clear_area: void,
+    copy_area: void,
+    copy_plane: void,
+    poly_point: void,
+    poly_line: void,
+    poly_segment: void,
+    poly_rectangle: void,
+    poly_arc: void,
+    fill_poly: void,
+    poly_fill_rectangle: void,
+    poly_fill_arc: void,
+    put_image: void,
+    get_image: protocol.GetImageReply,
+    poly_text_8: void,
+    poly_text_16: void,
+    image_text_8: void,
+    image_text_16: void,
+    create_colormap: void,
+    free_colormap: void,
+    copy_colormap_and_free: void,
+    install_colormap: void,
+    uninstall_colotmap: void,
+    list_installed_colormaps: protocol.ListInstalledColormapsReply,
+    alloc_color: protocol.AllocColorReply,
+    alloc_named_color: protocol.AllocNamedColorReply,
+    alloc_color_cells: protocol.AllocColorCellsReply,
+    alloc_color_planes: protocol.AllocColorPlanesReply,
+    free_colors: void,
+    store_colors: void,
+    store_named_color: void,
+    query_colors: protocol.QueryColorsReply,
+    lookup_color: protocol.LookupColorReply,
+    create_cursor: void,
+    create_glyph_cursor: void,
+    free_cursor: void,
+    recolor_cursor: void,
+    query_best_size: protocol.QueryBestSizeReply,
+    query_extension: protocol.QueryExtensionReply,
+    list_extensions: protocol.ListExtensionsReply,
+    change_keyboard_mapping: void,
+    get_keyboard_mapping: protocol.GetKeyboardMappingReply,
+    change_keyboard_control: void,
+    get_keyboard_control: protocol.GetKeyboardControlReply,
+    bell: void,
+    change_pointer_control: void,
+    get_pointer_control: protocol.GetPointerControlReply,
+    set_screen_saver: void,
+    get_screen_saver: protocol.GetScreenSaverReply,
+    change_hosts: void,
+    list_hosts: protocol.ListHostsReply,
+    set_access_control: void,
+    set_close_down_mode: void,
+    kill_client: void,
+    rotate_properties: void,
+    force_screen_saver: void,
+    set_pointer_mapping: protocol.SetPointerMappingReply,
+    get_pointer_mapping: protocol.GetPointerMappingReply,
+    set_modifier_mapping: protocol.SetModifierMappingReply,
+    get_modifier_mapping: protocol.GetModifierMappingReply,
+    no_operation: void,
 };
 
 pub fn connect(
