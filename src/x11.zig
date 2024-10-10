@@ -38,7 +38,7 @@ pub const Server = struct {
     write_mutex: std.Thread.Mutex = .{},
 
     vendor: []u8,
-    formats: []io.PixelFormat,
+    formats: []protocol.PixelFormat,
     success_data: []u8,
     success: *setup.Success,
 
@@ -95,7 +95,7 @@ pub const Server = struct {
         const vendor = vendor_data[0..success.vendor_len];
         const formats_data = vendor_data[pad(u16, success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
-        const formats_ptr: [*]io.PixelFormat = @ptrFromInt(formats_address);
+        const formats_ptr: [*]protocol.PixelFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
 
         const screen = first_success_screen(success) orelse {
@@ -192,7 +192,7 @@ pub const Server = struct {
         });
 
         try writer.writeInt(u32, 0xff000000, arch.endian());
-        try writer.writeStruct(io.EventSet.all);
+        try writer.writeStruct(protocol.EventSet.all);
 
         return window_id;
     }
@@ -591,13 +591,13 @@ pub const Protocol = enum(u8) {
 // **************************************************************************
 
 // TOOD: make this a static method of some type
-inline fn first_success_screen(success: *setup.Success) ?*io.Screen {
+inline fn first_success_screen(success: *setup.Success) ?*protocol.Screen {
     if (success.num_screens > 0) {
         var address = @intFromPtr(success);
 
         address += @sizeOf(setup.Success);
         address += pad(u16, success.vendor_len);
-        address += success.num_formats * @sizeOf(io.PixelFormat);
+        address += success.num_formats * @sizeOf(protocol.PixelFormat);
 
         return @ptrFromInt(address);
     } else {
@@ -606,18 +606,18 @@ inline fn first_success_screen(success: *setup.Success) ?*io.Screen {
 }
 
 // TOOD: make this a static method of some type
-inline fn first_screen_depth(screen: *io.Screen) ?*io.Depth {
+inline fn first_screen_depth(screen: *protocol.Screen) ?*protocol.Depth {
     if (screen.num_depths > 0) {
-        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(io.Screen));
+        return @ptrFromInt(@intFromPtr(screen) + @sizeOf(protocol.Screen));
     } else {
         return null;
     }
 }
 
 // TOOD: make this a static method of some type
-inline fn first_depth_visual(depth: *io.Depth) ?*io.Visual {
+inline fn first_depth_visual(depth: *protocol.Depth) ?*protocol.Visual {
     if (depth.num_visuals > 0) {
-        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(io.Depth));
+        return @ptrFromInt(@intFromPtr(depth) + @sizeOf(protocol.Depth));
     } else {
         return null;
     }
