@@ -9,6 +9,16 @@ var atoms = struct {
     _NET_FRAME_EXTENTS: u32 = x11.none,
     _NET_WM_NAME: u32 = x11.none,
     _NET_WM_STATE: u32 = x11.none,
+
+    pub fn lookup(this: @This(), atom_id: u32) []const u8 {
+        if (atom_id == this.WM_DELETE_WINDOW) return "WM_DELETE_WINDOW";
+        if (atom_id == this.WM_PROTOCOLS) return "WM_PROTOCOLS";
+        if (atom_id == this.WM_STATE) return "WM_STATE";
+        if (atom_id == this._NET_FRAME_EXTENTS) return "_NET_FRAME_EXTENTS";
+        if (atom_id == this._NET_WM_NAME) return "_NET_WM_NAME";
+        if (atom_id == this._NET_WM_STATE) return "_NET_WM_STATE";
+        return "unknown";
+    }
 }{};
 
 const AppContext = struct {
@@ -47,6 +57,7 @@ fn handleMessage(message: x11.Message, context: ?*anyopaque) void {
         .@"error" => |err| std.log.err("server sent: {any}", .{err}),
         .reply => unreachable,
         .client_message => |evt| handleClientMessage(evt, ctx),
+        .property_notify => |evt| handlePropertyNotify(evt, ctx),
         else => {},
     }
 }
@@ -56,6 +67,23 @@ fn handleClientMessage(
     context: *AppContext,
 ) void {
     if (evt.type == atoms.WM_PROTOCOLS) handleWMProtocols(evt, context);
+}
+
+fn handlePropertyNotify(
+    evt: TagPayload(x11.Message, .property_notify),
+    context: *AppContext,
+) void {
+    const window_id = evt.window_id;
+    const atom = atoms.lookup(evt.atom_id);
+    const timestamp = evt.timestamp;
+    const state = @tagName(evt.state);
+
+    _ = context;
+
+    x11.log.debug(
+        "wid:{d} {s} {s} @ {d}",
+        .{ window_id, state, atom, timestamp },
+    );
 }
 
 fn handleWMProtocols(
