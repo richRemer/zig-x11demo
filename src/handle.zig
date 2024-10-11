@@ -12,7 +12,11 @@ pub fn message(msg: x11.Message, context: ?*anyopaque) void {
         .expose => |evt| expose(evt, ctx),
         .focus_in => |evt| focusIn(evt, ctx),
         .focus_out => |evt| focusOut(evt, ctx),
+        .keymap_notify => |evt| keymapNotify(evt, ctx),
+        .map_notify => |evt| mapNotify(evt, ctx),
         .property_notify => |evt| propertyNotify(evt, ctx),
+        .reparent_notify => |evt| reparentNotify(evt, ctx),
+        .visibility_notify => |evt| visibilityNotify(evt, ctx),
         .button_press,
         .button_release,
         .circulate_notify,
@@ -38,7 +42,6 @@ pub fn message(msg: x11.Message, context: ?*anyopaque) void {
         .selection_request,
         .unmap_notify,
         => |evt| unknownEvent(evt, ctx),
-        else => {},
     }
 }
 
@@ -52,51 +55,89 @@ fn clientMessage(
 fn expose(evt: x11.protocol.ExposeEvent, context: *app.Context) void {
     _ = context;
 
-    const window_id = evt.window_id;
+    const wid = evt.window_id;
     const x = evt.x;
     const y = evt.y;
     const w = evt.width;
     const h = evt.height;
 
-    x11.log.debug(
-        "wid:{d} expose {d},{d}({d}x{d})",
-        .{ window_id, x, y, w, h },
-    );
+    x11.log.debug("wid:{d} expose {d},{d}({d}x{d})", .{ wid, x, y, w, h });
 }
 
 fn focusIn(evt: x11.protocol.FocusInEvent, context: *app.Context) void {
     _ = context;
 
-    const window_id = evt.window_id;
+    const wid = evt.window_id;
     const mode = @tagName(evt.mode);
     const detail = @tagName(evt.detail);
 
-    x11.log.debug("wid:{d} focus {s} {s}", .{ window_id, mode, detail });
+    x11.log.debug("wid:{d} focus {s} {s}", .{ wid, mode, detail });
 }
 
 fn focusOut(evt: x11.protocol.FocusOutEvent, context: *app.Context) void {
     _ = context;
 
-    const window_id = evt.window_id;
+    const wid = evt.window_id;
     const mode = @tagName(evt.mode);
     const detail = @tagName(evt.detail);
 
-    x11.log.debug("wid:{d} blur {s} {s}", .{ window_id, mode, detail });
+    x11.log.debug("wid:{d} blur {s} {s}", .{ wid, mode, detail });
+}
+
+fn keymapNotify(
+    evt: x11.protocol.KeymapNotifyEvent,
+    context: *app.Context,
+) void {
+    _ = context;
+    x11.log.debug("keymap update: {any}", .{evt.keys});
+}
+
+fn mapNotify(evt: x11.protocol.MapNotifyEvent, context: *app.Context) void {
+    _ = context;
+
+    const wid = evt.window_id;
+    const eid = evt.event_window_id;
+    const override = if (evt.override_redirect) " (override redirect)" else "";
+
+    x11.log.debug("wid:{d} mapped {d}{s}", .{ wid, eid, override });
 }
 
 fn propertyNotify(
     evt: x11.protocol.PropertyNotifyEvent,
     context: *app.Context,
 ) void {
-    const window_id = evt.window_id;
+    const wid = evt.window_id;
     const atom = context.atoms.lookup(evt.atom_id);
     const timestamp = evt.timestamp;
     const state = @tagName(evt.state);
 
-    x11.log.debug(
-        "wid:{d} {s} {s} @ {d}",
-        .{ window_id, state, atom, timestamp },
-    );
+    x11.log.debug("wid:{d} {s} {s} @ {d}", .{ wid, state, atom, timestamp });
+}
+
+fn reparentNotify(
+    evt: x11.protocol.ReparentNotifyEvent,
+    context: *app.Context,
+) void {
+    _ = context;
+
+    const wid = evt.window_id;
+    const pid = evt.parent_window_id;
+    const eid = evt.event_window_id;
+    const override = if (evt.override_redirect) " (override redirect)" else "";
+
+    x11.log.debug("wid:{d} reparent {d}/{d}{s}", .{ wid, pid, eid, override });
+}
+
+fn visibilityNotify(
+    evt: x11.protocol.VisibilityNotifyEvent,
+    context: *app.Context,
+) void {
+    _ = context;
+
+    const wid = evt.window_id;
+    const state = @tagName(evt.state);
+
+    x11.log.debug("wid:{d} visibility {s}", .{ wid, state });
 }
 
 fn unknownEvent(
@@ -120,12 +161,10 @@ fn deleteWindow(
     evt: x11.protocol.ClientMessageEvent,
     context: *app.Context,
 ) void {
-    context.server.destroyWindow(evt.window_id) catch |err| {
-        std.log.err("could not destroy window {d}: {any}", .{
-            evt.window_id,
-            err,
-        });
+    const wid = evt.window_id;
 
+    context.server.destroyWindow(wid) catch |err| {
+        std.log.err("could not destroy window {d}: {any}", .{ wid, err });
         return;
     };
 
