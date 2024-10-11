@@ -57,28 +57,69 @@ fn handleMessage(message: x11.Message, context: ?*anyopaque) void {
         .@"error" => |err| std.log.err("server sent: {any}", .{err}),
         .reply => unreachable,
         .client_message => |evt| handleClientMessage(evt, ctx),
+        .expose => |evt| handleExpose(evt, ctx),
         .property_notify => |evt| handlePropertyNotify(evt, ctx),
+        .button_press,
+        .button_release,
+        .circulate_notify,
+        .circulate_request,
+        .colormap_notify,
+        .configure_notify,
+        .configure_request,
+        .create_notify,
+        .destroy_notify,
+        .enter_notify,
+        .graphics_exposure,
+        .gravity_notify,
+        .key_press,
+        .key_release,
+        .leave_notify,
+        .map_request,
+        .mapping_notify,
+        .motion_notify,
+        .no_exposure,
+        .resize_request,
+        .selection_clear,
+        .selection_notify,
+        .selection_request,
+        .unmap_notify,
+        => |evt| handleUnknownEvent(evt, ctx),
         else => {},
     }
 }
 
 fn handleClientMessage(
-    evt: TagPayload(x11.Message, .client_message),
+    evt: x11.protocol.ClientMessageEvent,
     context: *AppContext,
 ) void {
     if (evt.type == atoms.WM_PROTOCOLS) handleWMProtocols(evt, context);
 }
 
+fn handleExpose(evt: x11.protocol.ExposeEvent, context: *AppContext) void {
+    _ = context;
+
+    const window_id = evt.window_id;
+    const x = evt.x;
+    const y = evt.y;
+    const w = evt.width;
+    const h = evt.height;
+
+    x11.log.debug(
+        "wid:{d} expose {d},{d}({d}x{d})",
+        .{ window_id, x, y, w, h },
+    );
+}
+
 fn handlePropertyNotify(
-    evt: TagPayload(x11.Message, .property_notify),
+    evt: x11.protocol.PropertyNotifyEvent,
     context: *AppContext,
 ) void {
+    _ = context;
+
     const window_id = evt.window_id;
     const atom = atoms.lookup(evt.atom_id);
     const timestamp = evt.timestamp;
     const state = @tagName(evt.state);
-
-    _ = context;
 
     x11.log.debug(
         "wid:{d} {s} {s} @ {d}",
@@ -86,8 +127,17 @@ fn handlePropertyNotify(
     );
 }
 
+fn handleUnknownEvent(
+    evt: x11.protocol.UnknownEvent,
+    context: *AppContext,
+) void {
+    _ = context;
+    const event = @tagName(evt.code);
+    x11.log.debug("{s}", .{event});
+}
+
 fn handleWMProtocols(
-    evt: TagPayload(x11.Message, .client_message),
+    evt: x11.protocol.ClientMessageEvent,
     context: *AppContext,
 ) void {
     const datum = @as(*u32, @ptrFromInt(@intFromPtr(&evt.data))).*;
@@ -95,7 +145,7 @@ fn handleWMProtocols(
 }
 
 fn handleDeleteWindow(
-    evt: TagPayload(x11.Message, .client_message),
+    evt: x11.protocol.ClientMessageEvent,
     context: *AppContext,
 ) void {
     context.server.destroyWindow(evt.window_id) catch |err| {
