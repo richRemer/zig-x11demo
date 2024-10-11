@@ -132,6 +132,17 @@ pub const Server = struct {
         this.allocator.free(this.success_data);
     }
 
+    pub fn bell(this: *Server, percent: i8) !void {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(protocol.BellRequest{
+            .percent = percent,
+        });
+    }
+
     pub fn changeProperty(
         this: *Server,
         comptime T: type,

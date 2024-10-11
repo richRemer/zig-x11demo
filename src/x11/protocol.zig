@@ -1466,6 +1466,12 @@ pub const SetupRequest = extern struct {
     pad1: u16 = 0,
 };
 
+pub const BellRequest = extern struct {
+    opcode: Opcode = .bell,
+    percent: i8,
+    request_len: u16 = 1,
+};
+
 pub const ChangePropertyRequest = extern struct {
     opcode: Opcode = .change_property,
     mode: ChangePropertyMode,
