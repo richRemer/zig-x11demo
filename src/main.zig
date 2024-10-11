@@ -58,6 +58,8 @@ fn handleMessage(message: x11.Message, context: ?*anyopaque) void {
         .reply => unreachable,
         .client_message => |evt| handleClientMessage(evt, ctx),
         .expose => |evt| handleExpose(evt, ctx),
+        .focus_in => |evt| handleFocusIn(evt, ctx),
+        .focus_out => |evt| handleFocusOut(evt, ctx),
         .property_notify => |evt| handlePropertyNotify(evt, ctx),
         .button_press,
         .button_release,
@@ -108,6 +110,26 @@ fn handleExpose(evt: x11.protocol.ExposeEvent, context: *AppContext) void {
         "wid:{d} expose {d},{d}({d}x{d})",
         .{ window_id, x, y, w, h },
     );
+}
+
+fn handleFocusIn(evt: x11.protocol.FocusInEvent, context: *AppContext) void {
+    _ = context;
+
+    const window_id = evt.window_id;
+    const mode = @tagName(evt.mode);
+    const detail = @tagName(evt.detail);
+
+    x11.log.debug("wid:{d} focus {s} {s}", .{ window_id, mode, detail });
+}
+
+fn handleFocusOut(evt: x11.protocol.FocusOutEvent, context: *AppContext) void {
+    _ = context;
+
+    const window_id = evt.window_id;
+    const mode = @tagName(evt.mode);
+    const detail = @tagName(evt.detail);
+
+    x11.log.debug("wid:{d} blur {s} {s}", .{ window_id, mode, detail });
 }
 
 fn handlePropertyNotify(
