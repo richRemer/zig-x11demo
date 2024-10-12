@@ -223,8 +223,25 @@ pub const Server = struct {
     }
 
     pub fn createWindow(this: *Server) !u32 {
-        const num_flags = 2;
+        const flags = 2;
         const window_id = this.getNextId();
+
+        // try this.sendRequest(.{
+        //     protocol.CreateWindowRequest{
+        //         .depth = 0, // TODO: match root window depth?
+        //         .request_len = protocol.CreateWindowRequest.requestLen(flags),
+        //         .window_id = window_id,
+        //         .parent_id = this.root_window_id,
+        //         .class = protocol.CreateWindowClass.input_output,
+        //         .value_mask = .{
+        //             .background_pixel = true,
+        //             .event_mask = true,
+        //         },
+        //     },
+        //     @as(u32, 0xff000000),
+        //     protocol.EventSet.all,
+        // });
+
         const writer = this.connection.stream.writer();
 
         this.write_mutex.lock();
@@ -232,7 +249,7 @@ pub const Server = struct {
 
         try writer.writeStruct(protocol.CreateWindowRequest{
             .depth = 0, // TODO: figure out root window depth
-            .request_len = protocol.CreateWindowRequest.requestLen(num_flags),
+            .request_len = protocol.CreateWindowRequest.requestLen(flags),
             .window_id = window_id,
             .parent_id = this.root_window_id,
             .class = protocol.CreateWindowClass.input_output,
@@ -249,12 +266,7 @@ pub const Server = struct {
     }
 
     pub fn destroyWindow(this: *Server, window_id: u32) !void {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.DestroyWindowRequest{
+        try this.sendRequest(protocol.DestroyWindowRequest{
             .window_id = window_id,
         });
     }
@@ -407,30 +419,66 @@ pub const Server = struct {
     }
 
     pub fn mapWindow(this: *Server, window_id: u32) !void {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.MapWindowRequest{
+        try this.sendRequest(protocol.MapWindowRequest{
             .window_id = window_id,
         });
     }
 
-    /// Register a handler to be called when the server sends an error or an
-    /// event.  If a context is provided, the context will also be passed to
-    /// the handler.
-    pub fn registerHandler(
-        this: *Server,
-        handler: fn (Message, ?*anyopaque) void,
-        context: ?*anyopaque,
-    ) void {
-        if (this.handler == null) {
-            this.handler = handler;
-            this.handler_context = context;
-        } else {
-            @panic("only one handler can be registered");
+    /// Calculate the size of a value for sending over the network in a
+    /// request.
+    fn calculateSize(value: anytype) usize {
+        const T = @TypeOf(value);
+        const size = switch (@typeInfo(T)) {
+            .bool => 1,
+            .null => 0,
+            .void => 0,
+            .@"enum" => @sizeOf(T),
+            .@"struct" => @sizeOf(T),
+            .array => @sizeOf(T),
+            .float => @sizeOf(T),
+            .int => @sizeOf(T),
+            .pointer => |ptr| sz: {
+                if (ptr.sentinel != null) {
+                    @compileError("size of pointer with sentinel ambiguous");
+                }
+
+                switch (ptr.size) {
+                    .Many, .C => @compileError("size of pointer unknown"),
+                    .One => break :sz @sizeOf(ptr.child),
+                    .Slice => break :sz @sizeOf(ptr.child) * value.len,
+                }
+            },
+            // TODO: union size could be equal to largest constituent field?
+            else => @compileError("size of " ++ @typeName(T) ++ " unknown"),
+        };
+
+        return @intCast(size);
+    }
+
+    /// Write value to buffer and return the number of bytes written.
+    fn fillSendBuffer(comptime T: type, buffer: []u8, value: T) usize {
+        const len = Server.calculateSize(value);
+
+        if (len == 0) {
+            return 0;
         }
+
+        const ptr = switch (@typeInfo(T)) {
+            .pointer => |info| switch (info.size) {
+                .Slice => value.ptr,
+                .One => value,
+                else => unreachable,
+            },
+            else => &value,
+        };
+
+        const address = @intFromPtr(ptr);
+        const src = @as([*]u8, @ptrFromInt(address));
+        const dst = buffer[0..len];
+
+        @memcpy(dst, src);
+
+        return len;
     }
 
     /// Produce a unique (within reason) ID that can be used to initialize a
@@ -568,6 +616,42 @@ pub const Server = struct {
         if (message != null and this.handler != null) {
             this.handler.?(message.?, this.handler_context);
         }
+    }
+
+    /// Register a handler to be called when the server sends an error or an
+    /// event.  If a context is provided, the context will also be passed to
+    /// the handler.
+    pub fn registerHandler(
+        this: *Server,
+        handler: fn (Message, ?*anyopaque) void,
+        context: ?*anyopaque,
+    ) void {
+        if (this.handler == null) {
+            this.handler = handler;
+            this.handler_context = context;
+        } else {
+            @panic("only one handler can be registered");
+        }
+    }
+
+    /// Send a request to the server.
+    fn sendRequest(this: *Server, request: anytype) !void {
+        var i: usize = 0;
+
+        const size: usize = @intCast(Server.calculateSize(request));
+        const buffer = try this.allocator.alloc(u8, size);
+        defer this.allocator.free(buffer);
+
+        inline for (@typeInfo(@TypeOf(request)).@"struct".fields) |field| {
+            const T = field.type;
+            const value = @field(request, field.name);
+            i += Server.fillSendBuffer(T, buffer[i..], value);
+        }
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try this.connection.stream.writeAll(buffer);
     }
 };
 
