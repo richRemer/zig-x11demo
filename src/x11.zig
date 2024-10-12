@@ -226,41 +226,21 @@ pub const Server = struct {
         const flags = 2;
         const window_id = this.getNextId();
 
-        // try this.sendRequest(.{
-        //     protocol.CreateWindowRequest{
-        //         .depth = 0, // TODO: match root window depth?
-        //         .request_len = protocol.CreateWindowRequest.requestLen(flags),
-        //         .window_id = window_id,
-        //         .parent_id = this.root_window_id,
-        //         .class = protocol.CreateWindowClass.input_output,
-        //         .value_mask = .{
-        //             .background_pixel = true,
-        //             .event_mask = true,
-        //         },
-        //     },
-        //     @as(u32, 0xff000000),
-        //     protocol.EventSet.all,
-        // });
-
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.CreateWindowRequest{
-            .depth = 0, // TODO: figure out root window depth
-            .request_len = protocol.CreateWindowRequest.requestLen(flags),
-            .window_id = window_id,
-            .parent_id = this.root_window_id,
-            .class = protocol.CreateWindowClass.input_output,
-            .value_mask = .{
-                .background_pixel = true,
-                .event_mask = true,
+        try this.sendRequest(.{
+            protocol.CreateWindowRequest{
+                .depth = 0, // TODO: match root window depth?
+                .request_len = protocol.CreateWindowRequest.requestLen(flags),
+                .window_id = window_id,
+                .parent_id = this.root_window_id,
+                .class = protocol.CreateWindowClass.input_output,
+                .value_mask = .{
+                    .background_pixel = true,
+                    .event_mask = true,
+                },
             },
+            @as(u32, 0xff000000),
+            protocol.EventSet.all,
         });
-
-        try writer.writeInt(u32, 0xff000000, arch.endian());
-        try writer.writeStruct(protocol.EventSet.all);
 
         return window_id;
     }
@@ -433,7 +413,19 @@ pub const Server = struct {
             .null => 0,
             .void => 0,
             .@"enum" => @sizeOf(T),
-            .@"struct" => @sizeOf(T),
+            .@"struct" => |struc| sz: {
+                var size: usize = 0;
+
+                if (struc.is_tuple) {
+                    inline for (struc.fields, 0..) |_, i| {
+                        size += Server.calculateSize(value[i]);
+                    }
+                } else {
+                    size = @sizeOf(T);
+                }
+
+                break :sz size;
+            },
             .array => @sizeOf(T),
             .float => @sizeOf(T),
             .int => @sizeOf(T),
