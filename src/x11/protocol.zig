@@ -1563,6 +1563,13 @@ pub const GetPropertyRequest = extern struct {
     pub const type_any: u32 = 0;
 };
 
+pub const GetWindowAttributesRequest = extern struct {
+    opcode: Opcode = .get_window_attributes,
+    unused: u8 = 0,
+    request_len: u16 = 3,
+    window_id: u32,
+};
+
 pub const InternAtomRequest = extern struct {
     opcode: Opcode = .intern_atom,
     only_if_exists: bool,

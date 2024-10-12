@@ -78,6 +78,24 @@ pub const Server = struct {
         }
     };
 
+    pub const WindowAttributes = struct {
+        backing_store: protocol.BackingStore,
+        visual: u32,
+        class: protocol.WindowClass,
+        bit_gravity: protocol.BitGravity,
+        win_gravity: protocol.WindowGravity,
+        backing_planes: u32,
+        backing_pixel: u32,
+        save_under: bool,
+        map_is_installed: bool,
+        map_state: protocol.MapState,
+        override_redirect: bool,
+        colormap: u32,
+        all_event_masks: protocol.EventSet,
+        your_event_mask: protocol.EventSet,
+        do_not_propogate_mask: protocol.DeviceEventSet,
+    };
+
     pub fn init(
         allocator: std.mem.Allocator,
         connection: Connection,
@@ -314,6 +332,49 @@ pub const Server = struct {
             .type_id = reply.type_id,
             .format = reply.format,
             .more = if (size == 0) 0 else reply.bytes_after / size,
+        };
+    }
+
+    pub fn getWindowAttributes(
+        this: *Server,
+        window_id: u32,
+    ) !WindowAttributes {
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(protocol.GetWindowAttributesRequest{
+            .window_id = window_id,
+        });
+
+        while (this.reply_data == null) {
+            try this.readMessage();
+        }
+
+        const reply_data = this.reply_data.?;
+        const reply = fromPtr(protocol.GetWindowAttributesReply, reply_data.ptr);
+
+        // clean up reply_data, keeping in mind defer happens in reverse order
+        defer this.reply_data = null;
+        defer this.allocator.free(reply_data);
+
+        return WindowAttributes{
+            .backing_store = reply.backing_store,
+            .visual = reply.visual,
+            .class = reply.class,
+            .bit_gravity = reply.bit_gravity,
+            .win_gravity = reply.win_gravity,
+            .backing_planes = reply.backing_planes,
+            .backing_pixel = reply.backing_pixel,
+            .save_under = reply.save_under,
+            .map_is_installed = reply.map_is_installed,
+            .map_state = reply.map_state,
+            .override_redirect = reply.override_redirect,
+            .colormap = reply.colormap,
+            .all_event_masks = reply.all_event_masks,
+            .your_event_mask = reply.your_event_mask,
+            .do_not_propogate_mask = reply.do_not_propogate_mask,
         };
     }
 
