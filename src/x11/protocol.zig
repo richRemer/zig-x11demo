@@ -1497,6 +1497,20 @@ pub const ChangePropertyRequest = extern struct {
     }
 };
 
+pub const ChangeWindowAttributesRequest = extern struct {
+    opcode: Opcode = .change_window_attributes,
+    unused: u8 = 0,
+    request_len: u16,
+    window_id: u32,
+    value_mask: WindowAttributes,
+    // values: [bits_set(value_mask)]u32 (sort of)
+
+    /// Calculate .request_len for request with given number of values.
+    pub fn requestLen(value_len: usize) u16 {
+        return @intCast(3 + value_len);
+    }
+};
+
 pub const CreateWindowRequest = extern struct {
     opcode: Opcode = .create_window,
     depth: u8,
@@ -1511,6 +1525,7 @@ pub const CreateWindowRequest = extern struct {
     class: CreateWindowClass = .copy_from_parent,
     visual: u32 = CreateWindowRequest.visual_copy_from_parent,
     value_mask: WindowAttributes,
+    // values: [bits set in value_mask]u32
 
     /// Default value for .visual.
     pub const visual_copy_from_parent: u32 = 0;

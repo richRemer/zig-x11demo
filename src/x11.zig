@@ -179,6 +179,31 @@ pub const Server = struct {
         try writer.writeByteNTimes(0, padded - data.len);
     }
 
+    pub fn changeWindowAttributes(
+        this: *Server,
+        window_id: u32,
+        value_mask: protocol.WindowAttributes,
+        values: []const u32,
+    ) !void {
+        const address = @intFromPtr(values.ptr);
+        const bytes_ptr = @as([*]u8, @ptrFromInt(address));
+        const value_data = bytes_ptr[0 .. values.len * 4];
+        const writer = this.connection.stream.writer();
+
+        this.write_mutex.lock();
+        defer this.write_mutex.unlock();
+
+        try writer.writeStruct(protocol.ChangeWindowAttributesRequest{
+            .request_len = protocol.ChangeWindowAttributesRequest.requestLen(
+                values.len,
+            ),
+            .window_id = window_id,
+            .value_mask = value_mask,
+        });
+
+        try writer.writeAll(value_data);
+    }
+
     pub fn createWindow(this: *Server) !u32 {
         const num_flags = 2;
         const window_id = this.getNextId();
