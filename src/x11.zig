@@ -9,6 +9,9 @@ const UnknownEvent = protocol.UnknownEvent;
 const UnknownMessage = protocol.UnknownMessage;
 const UnknownReply = protocol.UnknownReply;
 
+/// Used to create slices of X11 sized padding.
+const pad_data: [3]u8 = [_]u8{0} ** 3;
+
 /// Used by X11 to specify a missing resource ID.
 pub const none: u32 = 0;
 
@@ -108,7 +111,7 @@ pub const Server = struct {
         const success = @as(*protocol.SetupSuccessReply, @ptrFromInt(success_address));
         const vendor_data = success_data[@sizeOf(protocol.SetupSuccessReply)..];
         const vendor = vendor_data[0..success.vendor_len];
-        const formats_data = vendor_data[pad(u16, success.vendor_len)..];
+        const formats_data = vendor_data[padded_len(success.vendor_len)..];
         const formats_address = @intFromPtr(formats_data.ptr);
         const formats_ptr: [*]protocol.PixmapFormat = @ptrFromInt(formats_address);
         const formats = formats_ptr[0..success.num_formats];
@@ -151,12 +154,7 @@ pub const Server = struct {
     }
 
     pub fn bell(this: *Server, percent: i8) !void {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.BellRequest{
+        try this.sendRequest(protocol.BellRequest{
             .percent = percent,
         });
     }
@@ -175,26 +173,22 @@ pub const Server = struct {
         const format = @sizeOf(T) * 8;
         const data_len: u32 = @intCast(value.len);
         const mode = protocol.ChangePropertyMode.replace; // TOOD: support all modes
-        const writer = this.connection.stream.writer();
         const data_size = data_len * @sizeOf(T);
         const data = @as([*]const u8, @ptrCast(value.ptr))[0..data_size];
-        const padded = pad(usize, data.len);
 
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.ChangePropertyRequest{
-            .mode = mode,
-            .request_len = protocol.ChangePropertyRequest.requestLen(format, data_len),
-            .window_id = window_id,
-            .property_id = property_id,
-            .type_id = none, // ignored? (docs say "uninterpreted")
-            .format = format,
-            .data_len = data_len,
+        try this.sendRequest(.{
+            protocol.ChangePropertyRequest{
+                .mode = mode,
+                .request_len = protocol.ChangePropertyRequest.requestLen(format, data_len),
+                .window_id = window_id,
+                .property_id = property_id,
+                .type_id = none, // ignored? (docs say "uninterpreted")
+                .format = format,
+                .data_len = data_len,
+            },
+            data,
+            padding(data.len),
         });
-
-        try writer.writeAll(data);
-        try writer.writeByteNTimes(0, padded - data.len);
     }
 
     pub fn changeWindowAttributes(
@@ -203,23 +197,16 @@ pub const Server = struct {
         value_mask: protocol.WindowAttributes,
         values: []const u32,
     ) !void {
-        const address = @intFromPtr(values.ptr);
-        const bytes_ptr = @as([*]u8, @ptrFromInt(address));
-        const value_data = bytes_ptr[0 .. values.len * 4];
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.ChangeWindowAttributesRequest{
-            .request_len = protocol.ChangeWindowAttributesRequest.requestLen(
-                values.len,
-            ),
-            .window_id = window_id,
-            .value_mask = value_mask,
+        try this.sendRequest(.{
+            protocol.ChangeWindowAttributesRequest{
+                .request_len = protocol.ChangeWindowAttributesRequest.requestLen(
+                    values.len,
+                ),
+                .window_id = window_id,
+                .value_mask = value_mask,
+            },
+            values,
         });
-
-        try writer.writeAll(value_data);
     }
 
     pub fn createWindow(this: *Server) !u32 {
@@ -252,12 +239,7 @@ pub const Server = struct {
     }
 
     pub fn getAtomName(this: *Server, atom_id: u32) !Atom {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.GetAtomNameRequest{
+        try this.sendRequest(protocol.GetAtomNameRequest{
             .atom_id = atom_id,
         });
 
@@ -288,12 +270,7 @@ pub const Server = struct {
         window_id: u32,
         property_id: u32,
     ) !Property {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.GetPropertyRequest{
+        try this.sendRequest(protocol.GetPropertyRequest{
             .delete = false,
             .window_id = window_id,
             .property_id = property_id,
@@ -331,12 +308,7 @@ pub const Server = struct {
         this: *Server,
         window_id: u32,
     ) !WindowAttributes {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.GetWindowAttributesRequest{
+        try this.sendRequest(protocol.GetWindowAttributesRequest{
             .window_id = window_id,
         });
 
@@ -371,19 +343,15 @@ pub const Server = struct {
     }
 
     pub fn internAtom(this: *Server, name: []const u8, must_exist: bool) !u32 {
-        const writer = this.connection.stream.writer();
-
-        this.write_mutex.lock();
-        defer this.write_mutex.unlock();
-
-        try writer.writeStruct(protocol.InternAtomRequest{
-            .only_if_exists = must_exist,
-            .request_len = protocol.InternAtomRequest.requestLen(name.len),
-            .name_len = @intCast(name.len),
+        try this.sendRequest(.{
+            protocol.InternAtomRequest{
+                .only_if_exists = must_exist,
+                .request_len = protocol.InternAtomRequest.requestLen(name.len),
+                .name_len = @intCast(name.len),
+            },
+            name,
+            padding(name.len),
         });
-
-        try writer.writeAll(name);
-        try writer.writeByteNTimes(0, pad(usize, name.len) - name.len);
 
         while (this.reply_data == null) {
             try this.readMessage();
@@ -935,7 +903,7 @@ inline fn first_success_screen(
         var address = @intFromPtr(success);
 
         address += @sizeOf(protocol.SetupSuccessReply);
-        address += pad(u16, success.vendor_len);
+        address += padded_len(success.vendor_len);
         address += success.num_formats * @sizeOf(protocol.PixmapFormat);
 
         return @ptrFromInt(address);
@@ -962,8 +930,16 @@ inline fn first_depth_visual(depth: *protocol.Depth) ?*protocol.Visual {
     }
 }
 
-inline fn pad(comptime T: type, len: T) T {
-    return len + ((4 - (len % 4)) % 4);
+inline fn pad_len(len: usize) usize {
+    return (4 - (len % 4)) % 4;
+}
+
+inline fn padded_len(len: usize) usize {
+    return len + pad_len(len);
+}
+
+fn padding(len: usize) []const u8 {
+    return pad_data[0..pad_len(len)];
 }
 
 fn fromPtr(comptime T: type, ptr: anytype) T {
