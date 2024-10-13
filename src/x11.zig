@@ -55,7 +55,7 @@ pub const Server = struct {
 
     pub const Property = struct {
         allocator: std.mem.Allocator,
-        buffer: []u8,
+        buffer: []const u8,
         type_id: u32,
         format: u8,
         more: u32,
@@ -261,26 +261,19 @@ pub const Server = struct {
         window_id: u32,
         property_id: u32,
     ) !Property {
-        try this.sendRequest(protocol.GetPropertyRequest{
-            .delete = false,
-            .window_id = window_id,
-            .property_id = property_id,
-            .long_offset = 0,
-            .long_length = 1, // TODO: make this an argument
+        const reply_data = try this.sendRequestForData(.{
+            protocol.GetPropertyRequest{
+                .delete = false,
+                .window_id = window_id,
+                .property_id = property_id,
+                .long_offset = 0,
+                .long_length = 1, // TODO: make this an argument
+            },
         });
 
-        while (this.reply_data == null) {
-            try this.readMessage();
-        }
+        errdefer this.allocator.free(reply_data);
 
-        const reply_data = this.reply_data.?;
-        const buffer = try this.allocator.dupe(u8, reply_data);
-        errdefer this.allocator.free(buffer);
-
-        this.allocator.free(reply_data);
-        this.reply_data = null;
-
-        const reply = fromPtr(protocol.GetPropertyReply, buffer.ptr);
+        const reply = fromPtr(protocol.GetPropertyReply, reply_data.ptr);
         const size = switch (reply.format) {
             0, 8, 16, 32 => |bits| bits / 8,
             else => return error.X11ProtocolError,
@@ -288,7 +281,7 @@ pub const Server = struct {
 
         return Property{
             .allocator = this.allocator,
-            .buffer = buffer,
+            .buffer = reply_data,
             .type_id = reply.type_id,
             .format = reply.format,
             .more = if (size == 0) 0 else reply.bytes_after / size,
@@ -299,20 +292,16 @@ pub const Server = struct {
         this: *Server,
         window_id: u32,
     ) !WindowAttributes {
-        try this.sendRequest(protocol.GetWindowAttributesRequest{
-            .window_id = window_id,
-        });
+        const reply_data = try this.sendRequestForData(
+            protocol.GetWindowAttributesRequest{ .window_id = window_id },
+        );
 
-        while (this.reply_data == null) {
-            try this.readMessage();
-        }
-
-        const reply_data = this.reply_data.?;
-        const reply = fromPtr(protocol.GetWindowAttributesReply, reply_data.ptr);
-
-        // clean up reply_data, keeping in mind defer happens in reverse order
-        defer this.reply_data = null;
         defer this.allocator.free(reply_data);
+
+        const reply = fromPtr(
+            protocol.GetWindowAttributesReply,
+            reply_data.ptr,
+        );
 
         return WindowAttributes{
             .backing_store = reply.backing_store,
@@ -334,7 +323,7 @@ pub const Server = struct {
     }
 
     pub fn internAtom(this: *Server, name: []const u8, must_exist: bool) !u32 {
-        try this.sendRequest(.{
+        const reply_data = try this.sendRequestForData(.{
             protocol.InternAtomRequest{
                 .only_if_exists = must_exist,
                 .request_len = protocol.InternAtomRequest.requestLen(name.len),
@@ -344,15 +333,9 @@ pub const Server = struct {
             padding(name.len),
         });
 
-        while (this.reply_data == null) {
-            try this.readMessage();
-        }
+        defer this.allocator.free(reply_data);
 
-        const reply_data = this.reply_data.?;
         const reply = fromPtr(protocol.InternAtomReply, reply_data.ptr);
-
-        this.allocator.free(reply_data);
-        this.reply_data = null;
 
         return reply.atom;
     }
@@ -608,7 +591,7 @@ pub const Server = struct {
 
     /// Send a request to the server, then wait for and return reply data.
     fn sendRequestForData(this: *Server, request: anytype) ![]const u8 {
-        try this.readAll();
+        _ = try this.readAll();
         try this.sendRequest(request);
 
         // TODO: refigure this so .readMessage returns buffer or similar
@@ -621,16 +604,6 @@ pub const Server = struct {
         this.reply_data = null;
 
         return reply_data;
-    }
-
-    /// Send a request to the server, then wait for and return reply.
-    fn sendRequestForReply(
-        this: *Server,
-        comptime T: type,
-        request: anytype,
-    ) !T {
-        const reply_data = try this.sendRequestForData(request);
-        return fromPtr(T, reply_data.ptr);
     }
 };
 
