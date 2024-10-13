@@ -572,11 +572,16 @@ pub const Server = struct {
     fn sendRequest(this: *Server, request: anytype) !void {
         var i: usize = 0;
 
+        const request_info = @typeInfo(@TypeOf(request));
         const size: usize = @intCast(Server.calculateSize(request));
         const buffer = try this.allocator.alloc(u8, size);
         defer this.allocator.free(buffer);
 
-        inline for (@typeInfo(@TypeOf(request)).@"struct".fields) |field| {
+        if (request_info != .@"struct") {
+            @compileError("request should be a struct or tuple");
+        } else if (!request_info.@"struct".is_tuple) {
+            _ = Server.fillSendBuffer(@TypeOf(request), buffer, request);
+        } else inline for (request_info.@"struct".fields) |field| {
             const T = field.type;
             const value = @field(request, field.name);
             i += Server.fillSendBuffer(T, buffer[i..], value);
