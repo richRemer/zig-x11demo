@@ -66,16 +66,16 @@ pub const Server = struct {
 
         pub fn valueData(this: Property, comptime T: type) []T {
             switch (this.format) {
-                0 => @panic("property has no data"),
+                0 => return @as([]T, &.{}),
                 8 => if (T != u8) @panic("property data is u8"),
                 16 => if (T != u16) @panic("property data is u16"),
                 32 => if (T != u32) @panic("property data is u32"),
                 else => @panic("property format is not valid"),
             }
 
-            const reply = fromPtr(protocol.GetPropertyReply, this.buffer.ptr);
             const data = this.buffer[@sizeOf(protocol.GetPropertyReply)..];
             const address = @intFromPtr(data.ptr);
+            const reply = fromPtr(protocol.GetPropertyReply, this.buffer.ptr);
 
             return @as([*]T, @ptrFromInt(address))[0..reply.value_len];
         }
