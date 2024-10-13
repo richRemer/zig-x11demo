@@ -1484,7 +1484,7 @@ pub const ChangePropertyRequest = extern struct {
     data_len: u32,
 
     /// Calculate .request_len for request with given format and data length.
-    pub fn requestLen(format: u8, data_len: u32) u16 {
+    pub fn requestLen(format: u8, data_len: usize) u16 {
         const datum_size = switch (format) {
             8, 16, 32 => |bits| bits / 8,
             else => @panic("format must be 8, 16, or 32 bits"),
