@@ -25,7 +25,6 @@ const Connection = struct {
 pub const Server = struct {
     allocator: std.mem.Allocator,
     connection: Connection,
-    // TODO: add context parameter
     handler: ?*const fn (Message, ?*anyopaque) void = null,
     handler_context: ?*anyopaque = null,
     global_id: u32 = 0,
@@ -171,23 +170,23 @@ pub const Server = struct {
         }
 
         const format = @sizeOf(T) * 8;
-        const data_len: u32 = @intCast(value.len);
         const mode = protocol.ChangePropertyMode.replace; // TOOD: support all modes
-        const data_size = data_len * @sizeOf(T);
-        const data = @as([*]const u8, @ptrCast(value.ptr))[0..data_size];
 
         try this.sendRequest(.{
             protocol.ChangePropertyRequest{
                 .mode = mode,
-                .request_len = protocol.ChangePropertyRequest.requestLen(format, data_len),
+                .request_len = protocol.ChangePropertyRequest.requestLen(
+                    format,
+                    value.len,
+                ),
                 .window_id = window_id,
                 .property_id = property_id,
                 .type_id = none, // ignored? (docs say "uninterpreted")
                 .format = format,
-                .data_len = data_len,
+                .data_len = @intCast(value.len),
             },
-            data,
-            padding(data.len),
+            value,
+            padding(value.len * @sizeOf(T)),
         });
     }
 
