@@ -30,6 +30,7 @@ pub const Server = struct {
     global_id: u32 = 0,
     root_window_id: u32,
     root_visual_id: u32,
+    last_sequence_number: u16 = 1, // connection setup is seq #1
     reply_data: ?[]u8 = null,
 
     // TODO: move these to Connection
@@ -238,28 +239,19 @@ pub const Server = struct {
     }
 
     pub fn getAtomName(this: *Server, atom_id: u32) !Atom {
-        try this.sendRequest(protocol.GetAtomNameRequest{
-            .atom_id = atom_id,
+        const reply_data = try this.sendRequestForData(.{
+            protocol.GetAtomNameRequest{
+                .atom_id = atom_id,
+            },
         });
 
-        while (this.reply_data == null) {
-            try this.readMessage();
-        }
-
-        const reply_data = this.reply_data.?;
-        const buffer = try this.allocator.dupe(u8, reply_data);
-        errdefer this.allocator.free(buffer);
-
-        this.allocator.free(reply_data);
-        this.reply_data = null;
-
-        const reply = fromPtr(protocol.GetAtomNameReply, buffer.ptr);
-        const name = buffer[@sizeOf(protocol.GetAtomNameReply)..][0..reply.name_len];
+        const reply = fromPtr(protocol.GetAtomNameReply, reply_data.ptr);
+        const name_data = reply_data[@sizeOf(protocol.GetAtomNameReply)..];
 
         return Atom{
             .allocator = this.allocator,
-            .buffer = buffer,
-            .name = name,
+            .buffer = reply_data,
+            .name = name_data[0..reply.name_len],
             .atom_id = atom_id,
         };
     }
@@ -610,7 +602,35 @@ pub const Server = struct {
         this.write_mutex.lock();
         defer this.write_mutex.unlock();
 
+        this.last_sequence_number += 1;
         try this.connection.stream.writeAll(buffer);
+    }
+
+    /// Send a request to the server, then wait for and return reply data.
+    fn sendRequestForData(this: *Server, request: anytype) ![]const u8 {
+        try this.readAll();
+        try this.sendRequest(request);
+
+        // TODO: refigure this so .readMessage returns buffer or similar
+        while (this.reply_data == null) {
+            // TODO: verify reply sequence
+            try this.readMessage();
+        }
+
+        const reply_data = this.reply_data.?;
+        this.reply_data = null;
+
+        return reply_data;
+    }
+
+    /// Send a request to the server, then wait for and return reply.
+    fn sendRequestForReply(
+        this: *Server,
+        comptime T: type,
+        request: anytype,
+    ) !T {
+        const reply_data = try this.sendRequestForData(request);
+        return fromPtr(T, reply_data.ptr);
     }
 };
 
