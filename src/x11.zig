@@ -164,6 +164,7 @@ pub const Server = struct {
         comptime T: type,
         window_id: u32,
         property_id: u32,
+        mode: protocol.ChangePropertyMode,
         value: []const T,
     ) !void {
         if (T != u8 and T != u16 and T != u32) {
@@ -171,7 +172,6 @@ pub const Server = struct {
         }
 
         const format = @sizeOf(T) * 8;
-        const mode = protocol.ChangePropertyMode.replace; // TOOD: support all modes
 
         try this.sendRequest(.{
             protocol.ChangePropertyRequest{
