@@ -5,7 +5,10 @@ const x11 = @import("x11.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+
+    defer if (gpa.deinit() == .leak) {
+        std.log.err("memory leak detected\n", .{});
+    };
 
     const allocator = gpa.allocator();
     const connection = try x11.connect(.unix, "/tmp/.X11-unix/X", 0, 0);
